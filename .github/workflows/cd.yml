@@ -1,0 +1,47 @@
+name: CD (production)
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: '10' }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        env:
+          PA_API_URL: ${{ vars.PA_API_URL }}
+          FEDERAL_API_URL: ${{ vars.FEDERAL_API_URL }}
+        run: pnpm run build
+
+      - name: Deploy to Cloudflare
+        # Uses the Astro Cloudflare adapter's generated Worker bundle. Requires
+        # CLOUDFLARE_API_TOKEN (with Workers:Edit permission) and
+        # CLOUDFLARE_ACCOUNT_ID as repo secrets.
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --config dist/server/wrangler.json
+
+      - name: Summarize
+        if: always()
+        run: |
+          echo "## Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PA_API_URL: \`${{ vars.PA_API_URL || '(unset)' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- FEDERAL_API_URL: \`${{ vars.FEDERAL_API_URL || '(unset)' }}\`" >> "$GITHUB_STEP_SUMMARY"
