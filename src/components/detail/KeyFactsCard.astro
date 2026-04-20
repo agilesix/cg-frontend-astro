@@ -1,0 +1,72 @@
+---
+import { getByPath, formatDate, formatCurrency } from '@/lib/format';
+import type { KeyFactsCardConfig } from '@/types/portal';
+
+interface Props {
+  card: KeyFactsCardConfig;
+  opportunity: unknown;
+}
+
+const { card, opportunity } = Astro.props;
+
+function renderValue(path: string): string | null {
+  const raw = getByPath(opportunity, path);
+  if (raw == null) return null;
+
+  // Best-effort type inference by path suffix.
+  if (path.includes('Date')) return formatDate(raw);
+  if (path.includes('Amount')) return formatCurrency(raw);
+  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
+  if (typeof raw === 'number' || typeof raw === 'string') return String(raw);
+  return null;
+}
+
+const rows = card.facts
+  .map((f) => ({ term: f.term, value: renderValue(f.fieldPath), hint: f.hint }))
+  .filter((r) => r.value != null);
+---
+
+{
+  rows.length > 0 && (
+    <div class="usa-card">
+      <div class="usa-card__container">
+        <header class="usa-card__header">
+          <h2 class="usa-card__heading">{card.heading}</h2>
+        </header>
+        <div class="usa-card__body">
+          <dl>
+            {rows.map((r) => (
+              <div class="fact-row">
+                <dt>{r.term}</dt>
+                <dd>
+                  {r.value}
+                  {r.hint && <span class="usa-hint"> — {r.hint}</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+<style>
+  .fact-row {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1fr) 2fr;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #dfe1e2;
+  }
+  .fact-row:last-child {
+    border-bottom: 0;
+  }
+  dt {
+    font-weight: 600;
+    color: #565c65;
+  }
+  dd {
+    margin: 0;
+  }
+</style>

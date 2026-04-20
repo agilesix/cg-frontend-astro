@@ -1,0 +1,68 @@
+---
+import type { SourceId } from '@/client/federation/source';
+import { getByPath } from '@/lib/format';
+
+interface Props {
+  opportunity: unknown;
+  source: SourceId;
+}
+
+const { opportunity, source } = Astro.props;
+
+const sourceLabel = source === 'pa' ? 'Pennsylvania' : 'Federal (Grants.gov)';
+const sourceClass = source === 'pa' ? 'tag--source-pa' : 'tag--source-federal';
+
+const title = String(getByPath(opportunity, 'title') ?? 'Untitled opportunity');
+const statusValue = String(getByPath(opportunity, 'status.value') ?? '');
+const agency = String(getByPath(opportunity, 'customFields.agency.value.name') ?? '');
+---
+
+<header class="opportunity-header">
+  <nav aria-label="Breadcrumb">
+    <a href="/search">← Back to search</a>
+  </nav>
+
+  <div class="tags">
+    <span class={`usa-tag ${sourceClass}`}>{sourceLabel}</span>
+    {statusValue && <span class={`usa-tag tag--${statusValue}`}>{statusValue}</span>}
+  </div>
+
+  <h1>{title}</h1>
+  {agency && <p class="agency">{agency}</p>}
+</header>
+
+<style>
+  .opportunity-header {
+    margin-bottom: 1.5rem;
+  }
+  .tags {
+    display: flex;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+  }
+  .tag--open {
+    background-color: #00a91c;
+    color: #fff;
+  }
+  .tag--forecasted {
+    background-color: #0076d6;
+    color: #fff;
+  }
+  .tag--closed {
+    background-color: #757575;
+    color: #fff;
+  }
+  .tag--source-pa {
+    background-color: #112e51;
+    color: #fff;
+  }
+  .tag--source-federal {
+    background-color: #2e8540;
+    color: #fff;
+  }
+  .agency {
+    margin: 0;
+    color: #565c65;
+    font-size: 1.125rem;
+  }
+</style>

@@ -1,0 +1,45 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import SearchBar from '@/components/search/SearchBar.svelte';
+import SourceToggle from '@/components/search/SourceToggle.svelte';
+import FilterPanel from '@/components/search/FilterPanel.svelte';
+import ActiveFilters from '@/components/search/ActiveFilters.svelte';
+import SortControls from '@/components/search/SortControls.svelte';
+import ResultsList from '@/components/search/ResultsList.svelte';
+import Pagination from '@/components/search/Pagination.svelte';
+import FreshnessStrip from '@/components/search/FreshnessStrip.svelte';
+import UrlSync from '@/components/search/UrlSync.svelte';
+import { getSourceDescriptors } from '@/client';
+
+export const prerender = false;
+
+// Sources themselves are built client-side inside each island (a Source
+// contains an SDK Client, which is not JSON-serializable). We only pass the
+// serializable descriptor list (id + label) for the SourceToggle.
+const available = getSourceDescriptors();
+---
+
+<BaseLayout title="Search">
+  <div class="grid-container padding-y-4">
+    <h1>Search grant opportunities</h1>
+    <SearchBar client:load />
+    <FreshnessStrip client:load />
+
+    <div class="grid-row grid-gap margin-top-2">
+      <aside class="tablet:grid-col-3">
+        <SourceToggle available={available} client:load />
+        <FilterPanel client:load />
+      </aside>
+
+      <div class="tablet:grid-col-9">
+        <ActiveFilters client:load />
+        <SortControls client:load />
+        <ResultsList client:load />
+        <Pagination client:load />
+      </div>
+    </div>
+
+    <!-- Mounted exactly once; owns URL <-> store sync + triggers fetches. -->
+    <UrlSync client:load />
+  </div>
+</BaseLayout>

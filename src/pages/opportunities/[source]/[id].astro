@@ -1,0 +1,87 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import OpportunityHeader from '@/components/detail/OpportunityHeader.astro';
+import KeyFactsCard from '@/components/detail/KeyFactsCard.astro';
+import OpportunityBody from '@/components/detail/OpportunityBody.astro';
+import ActionButtons from '@/components/detail/ActionButtons.astro';
+import { getOpportunity } from '@/client';
+import { portalConfig } from '@/portal.config';
+import type { SourceId } from '@/client/federation/source';
+
+export const prerender = false;
+
+const { source, id } = Astro.params;
+
+if (source !== 'pa' && source !== 'federal') {
+  return Astro.redirect('/search');
+}
+if (!id) {
+  return Astro.redirect('/search');
+}
+
+const sourceId = source as SourceId;
+let opportunity: unknown = null;
+try {
+  opportunity = await getOpportunity(Astro.locals.sources, sourceId, id);
+} catch (err) {
+  // Treat API errors as "not found" from the user's perspective; the alert in
+  // the search page covers transient outages for lists, but for a missing
+  // detail we just bounce back.
+  console.error('Failed to load opportunity', err);
+  return Astro.redirect('/search');
+}
+
+if (!opportunity) {
+  return Astro.redirect('/search');
+}
+
+// Only render cards that either apply universally or match this source.
+const visibleCards = portalConfig.keyFactsCards.filter(
+  (c) => !c.sourceFilter || c.sourceFilter === sourceId,
+);
+
+const title = (opportunity as { title?: string }).title ?? 'Opportunity';
+---
+
+<BaseLayout title={title}>
+  <div class="grid-container padding-y-4">
+    <OpportunityHeader opportunity={opportunity} source={sourceId} />
+
+    <section class="key-facts">
+      <h2 class="usa-sr-only">Key facts</h2>
+      <div class="key-facts-grid">
+        {visibleCards.map((card) => <KeyFactsCard card={card} opportunity={opportunity} />)}
+      </div>
+    </section>
+
+    <OpportunityBody opportunity={opportunity} />
+    <ActionButtons opportunity={opportunity} />
+  </div>
+</BaseLayout>
+
+<style>
+  .key-facts {
+    margin: 1.5rem 0;
+  }
+  .key-facts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  @media (min-width: 640px) {
+    .key-facts-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .usa-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>

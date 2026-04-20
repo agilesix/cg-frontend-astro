@@ -1,0 +1,60 @@
+---
+import { getByPath } from '@/lib/format';
+
+interface Props {
+  opportunity: unknown;
+}
+
+const { opportunity } = Astro.props;
+
+const sourceUrl =
+  (getByPath(opportunity, 'customFields.additionalInfo.value.url') as string | undefined) ??
+  (getByPath(opportunity, 'customFields.paSlug.value') as string | undefined);
+
+interface Attachment {
+  name?: string;
+  downloadUrl?: string;
+  title?: string;
+  url?: string;
+}
+const attachments =
+  (getByPath(opportunity, 'customFields.attachments.value') as Attachment[] | undefined) ??
+  (getByPath(opportunity, 'customFields.paAdditionalResources.value') as Attachment[] | undefined) ??
+  [];
+---
+
+{
+  (sourceUrl || attachments.length > 0) && (
+    <section class="actions">
+      {sourceUrl && (
+        <a
+          href={sourceUrl}
+          class="usa-button"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Apply at source ↗
+        </a>
+      )}
+      {attachments.map((att) => {
+        const href = att.downloadUrl ?? att.url;
+        const label = att.name ?? att.title ?? 'Attachment';
+        if (!href) return null;
+        return (
+          <a href={href} class="usa-button usa-button--outline" target="_blank" rel="noopener noreferrer">
+            {label} ↗
+          </a>
+        );
+      })}
+    </section>
+  )
+}
+
+<style>
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin: 2rem 0;
+  }
+</style>

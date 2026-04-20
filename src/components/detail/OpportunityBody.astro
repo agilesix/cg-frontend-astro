@@ -1,0 +1,40 @@
+---
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
+import { getByPath } from '@/lib/format';
+
+interface Props {
+  opportunity: unknown;
+}
+
+const { opportunity } = Astro.props;
+
+const summary = String(getByPath(opportunity, 'summary') ?? '');
+const description = String(getByPath(opportunity, 'description') ?? '');
+const safeDescription = sanitizeHtml(description);
+---
+
+<section class="opportunity-body">
+  {summary && <p class="usa-intro">{summary}</p>}
+  {
+    safeDescription && (
+      <div class="description">
+        <h2>Description</h2>
+        <div set:html={safeDescription} />
+      </div>
+    )
+  }
+</section>
+
+<style>
+  .opportunity-body {
+    margin: 2rem 0;
+  }
+  .description :global(p) {
+    margin: 0.75rem 0;
+  }
+  .description :global(h2),
+  .description :global(h3),
+  .description :global(h4) {
+    margin-top: 1.5rem;
+  }
+</style>

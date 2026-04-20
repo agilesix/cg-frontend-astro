@@ -1,0 +1,84 @@
+---
+// Staged at install time by scripts/copy-uswds-assets.mjs; see that file for
+// why we don't import from `@uswds/uswds/dist/...` directly.
+import '@/styles/uswds.min.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'Search state and federal grant opportunities in one place.' } =
+  Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | CommonGrants Portal</title>
+    <meta name="description" content={description} />
+  </head>
+  <body>
+    <a class="usa-skipnav" href="#main-content">Skip to main content</a>
+
+    <section class="usa-banner" aria-label="Official government website">
+      <div class="usa-accordion">
+        <header class="usa-banner__header">
+          <div class="usa-banner__inner">
+            <div class="usa-banner__header-text">
+              An unofficial demo of the CommonGrants federated portal
+            </div>
+          </div>
+        </header>
+      </div>
+    </section>
+
+    <header class="usa-header usa-header--basic">
+      <div class="usa-nav-container">
+        <div class="usa-navbar">
+          <div class="usa-logo">
+            <em class="usa-logo__text">
+              <a href="/" title="Home">CommonGrants Portal</a>
+            </em>
+          </div>
+        </div>
+        <nav class="usa-nav" aria-label="Primary navigation">
+          <ul class="usa-nav__primary usa-accordion">
+            <li class="usa-nav__primary-item">
+              <a class="usa-nav-link" href="/search">Search</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <slot />
+    </main>
+
+    <footer class="usa-footer usa-footer--slim">
+      <div class="usa-footer__primary-section">
+        <div class="usa-footer__primary-container grid-row">
+          <div class="mobile-lg:grid-col-8">
+            <p class="usa-footer__primary-link">CommonGrants Portal demo</p>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  :global(html) {
+    scroll-behavior: smooth;
+  }
+  :global(body) {
+    font-family:
+      'Source Sans Pro',
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+  }
+</style>
