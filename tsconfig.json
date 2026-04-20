@@ -1,0 +1,13 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": [".astro/types.d.ts", "src/**/*", "test/**/*"],
+  "exclude": ["dist", "node_modules", ".wrangler"]
+}

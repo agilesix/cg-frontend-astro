@@ -1,0 +1,9 @@
+dist/
+coverage/
+.astro/
+.wrangler/
+node_modules/
+pnpm-lock.yaml
+public/uswds/
+src/styles/uswds.min.css
+src/styles/uswds.min.css.map
