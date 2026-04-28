@@ -9,13 +9,12 @@ import ResultsList from '@/components/search/ResultsList.svelte';
 import Pagination from '@/components/search/Pagination.svelte';
 import FreshnessStrip from '@/components/search/FreshnessStrip.svelte';
 import UrlSync from '@/components/search/UrlSync.svelte';
-import { getSourceDescriptors } from '@/client';
+import { getSourceDescriptors } from '@/server/upstream';
 
 export const prerender = false;
 
-// Sources themselves are built client-side inside each island (a Source
-// contains an SDK Client, which is not JSON-serializable). We only pass the
-// serializable descriptor list (id + label) for the SourceToggle.
+// Server-only: read configured sources from env. Pass only the serializable
+// `{id, label}[]` to islands — they don't need URLs or tokens.
 const available = getSourceDescriptors();
 ---
 
@@ -23,7 +22,7 @@ const available = getSourceDescriptors();
   <div class="grid-container padding-y-4">
     <h1>Search grant opportunities</h1>
     <SearchBar client:load />
-    <FreshnessStrip client:load />
+    <FreshnessStrip available={available} client:load />
 
     <div class="grid-row grid-gap margin-top-2">
       <aside class="tablet:grid-col-3">

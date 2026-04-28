@@ -1,14 +1,7 @@
-import type { Client } from '@common-grants/sdk/client';
-import type { z } from 'zod';
+// Browser-side source primitives. The full source config (URLs, tokens, SDK
+// Clients) lives only on the server in `src/server/upstream.ts`; the
+// browser only sees IDs and a tag attached to each merged item.
 
 export type SourceId = 'pa' | 'federal';
-
-export interface Source {
-  id: SourceId;
-  label: string;
-  client: Client;
-  schema: z.ZodTypeAny;
-  enabled: boolean;
-}
 
 export type Tagged<T> = T & { _source: SourceId };

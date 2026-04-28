@@ -4,7 +4,7 @@ import OpportunityHeader from '@/components/detail/OpportunityHeader.astro';
 import KeyFactsCard from '@/components/detail/KeyFactsCard.astro';
 import OpportunityBody from '@/components/detail/OpportunityBody.astro';
 import ActionButtons from '@/components/detail/ActionButtons.astro';
-import { getOpportunity } from '@/client';
+import { getFromSource } from '@/server/upstream';
 import { portalConfig } from '@/portal.config';
 import type { SourceId } from '@/client/federation/source';
 
@@ -22,11 +22,8 @@ if (!id) {
 const sourceId = source as SourceId;
 let opportunity: unknown = null;
 try {
-  opportunity = await getOpportunity(Astro.locals.sources, sourceId, id);
+  opportunity = await getFromSource(sourceId, id);
 } catch (err) {
-  // Treat API errors as "not found" from the user's perspective; the alert in
-  // the search page covers transient outages for lists, but for a missing
-  // detail we just bounce back.
   console.error('Failed to load opportunity', err);
   return Astro.redirect('/search');
 }

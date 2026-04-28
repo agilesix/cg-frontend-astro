@@ -1,16 +1,14 @@
 <script lang="ts">
   import { visibleItems, loading, bySource, cacheHit, fetchResults } from '@/stores/resultsStore';
   import { clearAllFilters } from '@/stores/searchStore';
-  import { createBrowserSources } from '@/client';
   import OpportunityCard from './OpportunityCard.svelte';
   import Alert from '@/components/uswds/Alert.svelte';
   import LoadingSpinner from '@/components/uswds/LoadingSpinner.svelte';
 
-  // Built client-side (see UrlSync for the same pattern + reasoning).
-  const sources = createBrowserSources();
-
   const sourcesWithErrors = $derived(
-    Object.entries($bySource).filter(([, info]) => info.error) as Array<[string, { error: Error }]>,
+    Object.entries($bySource).filter(([, info]) => info.error) as Array<
+      [string, { error: string }]
+    >,
   );
 </script>
 
@@ -20,7 +18,7 @@
 
 {#each sourcesWithErrors as [sourceId, info] (sourceId)}
   <Alert type="warning" heading="{sourceId === 'pa' ? 'Pennsylvania' : 'Federal'} unavailable">
-    {info.error.message}
+    {info.error}
   </Alert>
 {/each}
 
@@ -43,7 +41,7 @@
     <button
       type="button"
       class="usa-button usa-button--outline"
-      onclick={() => fetchResults(sources)}
+      onclick={() => fetchResults()}
     >
       Retry
     </button>

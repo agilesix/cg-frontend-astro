@@ -1,13 +1,12 @@
 <script lang="ts">
   import { bySource, clearCacheAndRefetch, loading } from '@/stores/resultsStore';
-  import { createBrowserSources } from '@/client';
   import type { SourceId } from '@/client/federation/source';
   import { formatRelativeAge } from '@/lib/format';
 
-  // Built client-side — a Source is not JSON-serializable so we can't take it
-  // as a prop from an Astro SSR parent.
-  const sources = createBrowserSources();
-  const enabledSourceIds = sources.map((s) => s.id);
+  interface Props {
+    available: Array<{ id: SourceId; label: string }>;
+  }
+  let { available }: Props = $props();
 
   function labelFor(id: SourceId): string {
     return id === 'pa' ? 'PA' : 'Federal';
@@ -15,10 +14,10 @@
 </script>
 
 <div class="freshness-strip" aria-live="polite">
-  {#each enabledSourceIds as id (id)}
-    {@const info = $bySource[id]}
+  {#each available as src (src.id)}
+    {@const info = $bySource[src.id]}
     <span class="freshness-item">
-      {labelFor(id)}:
+      {labelFor(src.id)}:
       {#if info.error}
         <span class="err">unavailable</span>
       {:else if info.dataAsOf}
@@ -32,7 +31,7 @@
     type="button"
     class="usa-button usa-button--unstyled refresh-btn"
     disabled={$loading}
-    onclick={() => clearCacheAndRefetch(sources)}
+    onclick={() => clearCacheAndRefetch()}
     aria-label="Refresh"
   >
     ↻ Refresh

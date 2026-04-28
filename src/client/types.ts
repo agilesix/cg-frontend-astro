@@ -1,5 +1,3 @@
-import type { Source } from './federation/source';
-
 export interface DateRangeValue {
   start?: string;
   end?: string;
@@ -15,12 +13,3 @@ export type FilterValue = string | string[] | DateRangeValue | NumberRangeValue 
 export type ActiveFilters = Record<string, FilterValue>;
 
 export type SortOrder = 'asc' | 'desc';
-
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace App {
-    interface Locals {
-      sources: Source[];
-    }
-  }
-}

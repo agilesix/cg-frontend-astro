@@ -1,6 +1,6 @@
 import { atom, computed } from 'nanostores';
-import type { Source, SourceId, Tagged } from '@/client/federation/source';
 import type { OppSortBy } from '@common-grants/sdk/types';
+import type { SourceId, Tagged } from '@/client/federation/source';
 import { searchAll } from '@/client/federation/search';
 import { resultCache } from '@/client/federation/cache';
 import { applyClientFilters, toOppFilters } from '@/client/filterMapping';
@@ -17,7 +17,10 @@ import {
   cacheKey,
 } from './searchStore';
 
-export type BySource = Record<SourceId, { total: number; dataAsOf: string | null; error?: Error }>;
+export type BySource = Record<
+  SourceId,
+  { total: number; dataAsOf: string | null; error?: string }
+>;
 
 const EMPTY_BY_SOURCE: BySource = {
   pa: { total: 0, dataAsOf: null },
@@ -29,7 +32,6 @@ export const bySource = atom<BySource>(EMPTY_BY_SOURCE);
 export const loading = atom<boolean>(false);
 export const cacheHit = atom<boolean>(false);
 
-/** Client-side filter + sort; produces the full post-pipeline list. */
 export const filteredSorted = computed(
   [rawItems, filters, sortBy, sortOrder],
   (items, f, sb, so) => {
@@ -39,20 +41,17 @@ export const filteredSorted = computed(
 );
 
 export const total = computed(filteredSorted, (items) => items.length);
-
 export const totalPagesCount = computed([filteredSorted, pageSize], (items, ps) =>
   totalPages(items.length, ps),
 );
-
 export const visibleItems = computed([filteredSorted, page, pageSize], (items, p, ps) =>
   paginate(items, p, ps),
 );
 
 let requestSeq = 0;
 
-export async function fetchResults(sources: Source[]): Promise<void> {
-  const enabled = new Set(enabledSources.get());
-  const active = sources.filter((s) => enabled.has(s.id));
+export async function fetchResults(): Promise<void> {
+  const enabled = [...enabledSources.get()];
   const key = cacheKey.get();
 
   const cached = resultCache.get(key);
@@ -68,11 +67,11 @@ export async function fetchResults(sources: Source[]): Promise<void> {
   loading.set(true);
   cacheHit.set(false);
   try {
-    const serverFilters = toOppFilters(filters.get(), portalConfig.filters);
-    const result = await searchAll(active, {
+    const result = await searchAll({
       search: query.get(),
-      filters: serverFilters,
+      filters: toOppFilters(filters.get(), portalConfig.filters),
       sorting: { sortBy: sortBy.get() as OppSortBy, sortOrder: sortOrder.get() },
+      enabledSources: enabled,
       pageSize: 100,
     });
     if (seq !== requestSeq) return;
@@ -84,7 +83,7 @@ export async function fetchResults(sources: Source[]): Promise<void> {
   }
 }
 
-export function clearCacheAndRefetch(sources: Source[]): Promise<void> {
+export function clearCacheAndRefetch(): Promise<void> {
   resultCache.clear();
-  return fetchResults(sources);
+  return fetchResults();
 }

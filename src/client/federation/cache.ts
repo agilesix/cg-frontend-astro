@@ -3,7 +3,10 @@ import type { SourceId, Tagged } from './source';
 
 export interface CachedSearch {
   items: Array<Tagged<unknown>>;
-  bySource: Record<SourceId, { total: number; dataAsOf: string | null; error?: Error }>;
+  // `error` is a string (not Error) so it survives JSON.stringify into
+  // sessionStorage cleanly. Server endpoint serializes Error.message before
+  // returning anyway.
+  bySource: Record<SourceId, { total: number; dataAsOf: string | null; error?: string }>;
 }
 
 interface CacheEntry extends CachedSearch {
