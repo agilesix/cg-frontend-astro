@@ -1,24 +1,23 @@
 import type { PortalConfig } from '@/types/portal';
 
 /**
- * The one place portal-level UX is declared: which filters appear, which
- * detail cards render, and in what order.
+ * Single source of truth for portal-level UX: which filters appear, where
+ * to read each filter's value per source, and which detail cards render.
  *
- * Filter IDs hardcoded into `filterMapping.toOppFilters()` for server-side
- * translation: `status`, `closeDate`, `funding`. Other server-side filter IDs
- * are ignored by the mapper (documented there).
+ * Filter definitions are agnostic of "where the filter is applied" — the
+ * server's `src/server/filterPushdown.ts` decides whether each filter is
+ * pushed down to the SDK's `.search()` call or applied in memory after.
  *
- * Client-side filters use `fieldPath` to read a value out of the parsed
- * Opportunity. Custom plugin fields live under `customFields.<key>.value`
- * (per the SDK's `withCustomFields` wrapping). For example, PA's category
- * lives at `customFields.paCategory.value`.
+ * `perSource[id].fieldPath` is the dot-notation path into the parsed
+ * Opportunity. Custom plugin fields live under `customFields.<key>.value`.
+ * A filter without any `perSource` entries (like `status`) applies to
+ * every source via canonical handling.
  */
 export const portalConfig: PortalConfig = {
   filters: [
     {
       id: 'status',
       label: 'Status',
-      mode: 'server',
       type: 'checkbox-group',
       options: ['open', 'forecasted', 'closed'],
       defaultOpen: true,
@@ -26,42 +25,41 @@ export const portalConfig: PortalConfig = {
     {
       id: 'closeDate',
       label: 'Close date',
-      mode: 'server',
       type: 'date-range',
+      perSource: {
+        pa: { fieldPath: 'keyDates.closeDate' },
+        federal: { fieldPath: 'keyDates.closeDate' },
+      },
     },
     {
       id: 'funding',
       label: 'Maximum award',
-      mode: 'server',
       type: 'number-range',
       hint: 'Enter amounts in whole dollars',
+      perSource: {
+        pa: { fieldPath: 'fundingDetails.maxAwardAmount.amount' },
+        federal: { fieldPath: 'fundingDetails.maxAwardAmount.amount' },
+      },
     },
     {
-      id: 'paCategory',
-      label: 'PA category',
-      mode: 'client',
+      id: 'category',
+      label: 'Category',
       type: 'checkbox-group',
-      sourceFilter: 'pa',
-      fieldPath: 'customFields.paCategory.value',
       optionsSource: 'derive',
+      perSource: {
+        pa: { fieldPath: 'customFields.paCategory.value' },
+        federal: { fieldPath: 'customFields.federalFundingSource.value' },
+      },
     },
     {
-      id: 'paFundingType',
-      label: 'PA funding type',
-      mode: 'client',
+      id: 'agency',
+      label: 'Agency',
       type: 'checkbox-group',
-      sourceFilter: 'pa',
-      fieldPath: 'customFields.paFundingType.value',
       optionsSource: 'derive',
-    },
-    {
-      id: 'federalAgency',
-      label: 'Federal agency',
-      mode: 'client',
-      type: 'checkbox-group',
-      sourceFilter: 'federal',
-      fieldPath: 'customFields.agency.value.name',
-      optionsSource: 'derive',
+      perSource: {
+        pa: { fieldPath: 'customFields.agency.value.name' },
+        federal: { fieldPath: 'customFields.agency.value.name' },
+      },
     },
   ],
 
