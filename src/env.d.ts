@@ -7,6 +7,9 @@ interface ImportMetaEnv {
   readonly PUBLIC_FEDERAL_API_URL?: string;
 }
 
+// Augments the global ImportMeta with our typed env. Referenced implicitly
+// by every `import.meta.env.X` access; eslint can't see that.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

@@ -1,26 +1,20 @@
 <script lang="ts">
-  import { visibleItems, loading, bySource, cacheHit, fetchResults } from '@/stores/resultsStore';
-  import { clearAllFilters } from '@/stores/searchStore';
+  import { visibleItems, loading, error, cacheHit, fetchActiveTab } from '@/stores/resultsStore';
+  import { clearAllFilters, activeTab } from '@/stores/searchStore';
   import OpportunityCard from './OpportunityCard.svelte';
   import Alert from '@/components/uswds/Alert.svelte';
   import LoadingSpinner from '@/components/uswds/LoadingSpinner.svelte';
-
-  const sourcesWithErrors = $derived(
-    Object.entries($bySource).filter(([, info]) => info.error) as Array<
-      [string, { error: string }]
-    >,
-  );
 </script>
 
 {#if $cacheHit}
   <p class="cache-indicator" aria-live="polite">Showing cached results</p>
 {/if}
 
-{#each sourcesWithErrors as [sourceId, info] (sourceId)}
-  <Alert type="warning" heading="{sourceId === 'pa' ? 'Pennsylvania' : 'Federal'} unavailable">
-    {info.error}
+{#if $error}
+  <Alert type="warning" heading="{$activeTab === 'pa' ? 'Pennsylvania' : 'Federal'} unavailable">
+    {$error}
   </Alert>
-{/each}
+{/if}
 
 {#if $loading && $visibleItems.length === 0}
   <div class="skeleton-list">
@@ -38,18 +32,14 @@
     <p><strong>No opportunities match your search.</strong></p>
     <p>Try adjusting your filters or search terms.</p>
     <button type="button" class="usa-button" onclick={clearAllFilters}>Clear filters</button>
-    <button
-      type="button"
-      class="usa-button usa-button--outline"
-      onclick={() => fetchResults()}
-    >
+    <button type="button" class="usa-button usa-button--outline" onclick={() => fetchActiveTab()}>
       Retry
     </button>
   </div>
 {:else}
   <ul class="results-list" aria-label="Opportunities">
     {#each $visibleItems as item, i (i)}
-      <li><OpportunityCard opportunity={item} /></li>
+      <li><OpportunityCard opportunity={item} source={$activeTab} /></li>
     {/each}
   </ul>
 {/if}

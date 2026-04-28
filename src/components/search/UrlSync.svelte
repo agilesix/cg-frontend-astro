@@ -1,17 +1,18 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { urlParams, hydrateStoresFromUrl } from '@/stores/searchStore';
-  import { fetchResults } from '@/stores/resultsStore';
+  import { urlParams, hydrateStoresFromUrl, activeTab } from '@/stores/searchStore';
+  import { fetchActiveTab } from '@/stores/resultsStore';
 
-  // No prop, no source list — `fetchResults` posts to `/api/search` which
-  // reads server-side env and fans out. Browser has no idea about Sources.
+  // No prop, no source list. `fetchActiveTab` posts to
+  // `/api/sources/[active]/search`; the server reads env and runs the
+  // upstream call. Browser knows nothing about source URLs or tokens.
 
   onMount(() => {
     hydrateStoresFromUrl(window.location.search);
-    void fetchResults();
+    void fetchActiveTab();
 
-    // Keep the URL in sync with state. replaceState (not pushState) so we
-    // don't inflate browser history with every filter toggle.
+    // Keep the URL synced. replaceState (not pushState) so we don't inflate
+    // browser history with every filter toggle.
     const unsubUrl = urlParams.subscribe((serialized) => {
       const next = serialized
         ? `${window.location.pathname}?${serialized}`
@@ -21,14 +22,22 @@
       }
     });
 
-    // Refetch on any cache-key-affecting change. The cache layer dedupes.
-    const unsubRefetch = urlParams.subscribe(() => {
-      void fetchResults();
+    // Refetch on any URL-relevant state change (active tab, query, filters).
+    // Cache layer dedupes — switching back to a recent state is instant.
+    const unsubRefetchOnStateChange = urlParams.subscribe(() => {
+      void fetchActiveTab();
+    });
+
+    // Also explicitly refetch when the active tab changes — `urlParams`
+    // fires for that too, but this makes the dependency obvious.
+    const unsubTab = activeTab.listen(() => {
+      void fetchActiveTab();
     });
 
     return () => {
       unsubUrl();
-      unsubRefetch();
+      unsubRefetchOnStateChange();
+      unsubTab();
     };
   });
 </script>

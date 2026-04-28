@@ -2,78 +2,78 @@ import { atom, computed, onMount } from 'nanostores';
 import { persistentAtom } from '@nanostores/persistent';
 import type { ActiveFilters, DateRangeValue, NumberRangeValue, SortOrder } from '@/client/types';
 import type { SourceId } from '@/client/federation/source';
-import { toOppFilters } from '@/client/filterMapping';
 import { portalConfig } from '@/portal.config';
 import { cacheKey as buildCacheKey } from '@/client/federation/cache';
 
 export const DEFAULT_PAGE_SIZE = 25;
-
-// Exported atoms intentionally do NOT use the `$`-prefix convention from the
-// nanostores docs: Svelte treats `$foo` in a component as store-auto-subscribe
-// syntax, which would clash with atom identifiers re-exported into .svelte
-// files. Plain names sidestep that parser ambiguity.
-export const query = atom<string>('');
-export const filters = atom<ActiveFilters>({});
-export const sortBy = atom<string>('keyDates.closeDate');
-export const sortOrder = atom<SortOrder>('asc');
-export const page = atom<number>(1);
-export const pageSize = atom<number>(DEFAULT_PAGE_SIZE);
-
-/**
- * Which sources to include in the federated fanout. Backed by localStorage so
- * the selection persists across sessions; also reflected in the URL so links
- * are shareable.
- */
-const ALL_SOURCES: SourceId[] = ['pa', 'federal'];
-
-export const enabledSources = persistentAtom<SourceId[]>('cg:enabledSources', ALL_SOURCES, {
-  encode: JSON.stringify,
-  decode: (raw) => {
-    try {
-      const parsed = JSON.parse(raw) as unknown;
-      if (Array.isArray(parsed)) {
-        return parsed.filter((v): v is SourceId => v === 'pa' || v === 'federal');
-      }
-    } catch {
-      // fall through to default
-    }
-    return ALL_SOURCES;
-  },
-});
-
-/**
- * Cache key includes only inputs that affect the API query. Client-side
- * filters and pagination are deliberately excluded so toggling them doesn't
- * invalidate the cache entry.
- */
-export const cacheKey = computed(
-  [query, filters, enabledSources, sortBy, sortOrder],
-  (q, f, enabled, sb, so) =>
-    buildCacheKey({
-      search: q,
-      enabledSources: [...enabled],
-      serverFilters: toOppFilters(f, portalConfig.filters),
-      sortBy: sb,
-      sortOrder: so,
-    }),
-);
-
+const VALID_TABS: ReadonlySet<SourceId> = new Set<SourceId>(['pa', 'federal']);
 const DEFAULT_SORT_BY = 'keyDates.closeDate';
 const DEFAULT_SORT_ORDER: SortOrder = 'asc';
 
-/** Serialize all shareable state into a URL search string. */
+// Plain (no `$` prefix) so Svelte's `$store` auto-subscribe syntax works
+// in `.svelte` files without identifier clashes.
+export const query = atom<string>('');
+export const filters = atom<ActiveFilters>({});
+export const sortBy = atom<string>(DEFAULT_SORT_BY);
+export const sortOrder = atom<SortOrder>(DEFAULT_SORT_ORDER);
+
+/** Page is per-tab — switching tabs restores the tab's last page. */
+export const pagesByTab = persistentAtom<Record<SourceId, number>>(
+  'cg:pagesByTab',
+  { pa: 1, federal: 1 },
+  {
+    encode: JSON.stringify,
+    decode: (raw) => {
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        return {
+          pa: typeof parsed.pa === 'number' && parsed.pa > 0 ? parsed.pa : 1,
+          federal: typeof parsed.federal === 'number' && parsed.federal > 0 ? parsed.federal : 1,
+        };
+      } catch {
+        return { pa: 1, federal: 1 };
+      }
+    },
+  },
+);
+
+export const pageSize = atom<number>(DEFAULT_PAGE_SIZE);
+
+/** Default to PA; user-driven changes persist across sessions. */
+export const activeTab = persistentAtom<SourceId>('cg:activeTab', 'pa', {
+  encode: (v) => v,
+  decode: (raw) => (VALID_TABS.has(raw as SourceId) ? (raw as SourceId) : 'pa'),
+});
+
+/** Convenience: read/write the active tab's page in one place. */
+export function getPage(): number {
+  return pagesByTab.get()[activeTab.get()] ?? 1;
+}
+export function setPage(n: number): void {
+  pagesByTab.set({ ...pagesByTab.get(), [activeTab.get()]: n });
+}
+
+/**
+ * Cache key for the active tab. Includes only inputs the server uses to
+ * fetch — sort and page are applied client-side over the cached list, so
+ * they're excluded.
+ */
+export const cacheKey = computed([activeTab, query, filters], (tab, q, f) =>
+  buildCacheKey(tab, { query: q, filters: f }),
+);
+
+/** Serialize shareable state into a URL search string. */
 export const urlParams = computed(
-  [query, filters, enabledSources, sortBy, sortOrder, page],
-  (q, f, enabled, sb, so, pg) => {
+  [query, filters, activeTab, sortBy, sortOrder, pagesByTab],
+  (q, f, tab, sb, so, pages) => {
     const params = new URLSearchParams();
     if (q) params.set('q', q);
-    if (enabled.length !== ALL_SOURCES.length || !ALL_SOURCES.every((s) => enabled.includes(s))) {
-      params.set('sources', [...enabled].sort().join(','));
-    }
+    if (tab !== 'pa') params.set('tab', tab);
     if (sb !== DEFAULT_SORT_BY || so !== DEFAULT_SORT_ORDER) {
       params.set('sort', `${sb}:${so}`);
     }
-    if (pg > 1) params.set('page', String(pg));
+    const tabPage = pages[tab] ?? 1;
+    if (tabPage > 1) params.set('page', String(tabPage));
     for (const [id, value] of Object.entries(f)) {
       if (value == null) continue;
       if (Array.isArray(value)) {
@@ -92,27 +92,19 @@ export const urlParams = computed(
   },
 );
 
-/** Hydrate all atoms from a URL search string. Called once on mount. */
 export function hydrateStoresFromUrl(search: string): void {
   const params = new URLSearchParams(search);
 
-  // Set everything EXCEPT page first. Each set may trigger the reset-page-to-1
-  // listener, which would clobber our page hydration. Setting page last
-  // sidesteps this without needing to disable listeners.
   if (params.has('q')) query.set(params.get('q') ?? '');
+  if (params.has('tab')) {
+    const t = params.get('tab') ?? '';
+    if (VALID_TABS.has(t as SourceId)) activeTab.set(t as SourceId);
+  }
   if (params.has('sort')) {
     const raw = params.get('sort') ?? '';
     const [sb, so] = raw.split(':');
     if (sb) sortBy.set(sb);
     if (so === 'asc' || so === 'desc') sortOrder.set(so);
-  }
-  if (params.has('sources')) {
-    const raw = params.get('sources') ?? '';
-    const parsed = raw
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s): s is SourceId => s === 'pa' || s === 'federal');
-    if (parsed.length > 0) enabledSources.set(parsed);
   }
 
   const nextFilters: ActiveFilters = {};
@@ -139,24 +131,24 @@ export function hydrateStoresFromUrl(search: string): void {
   }
   if (Object.keys(nextFilters).length > 0) filters.set(nextFilters);
 
+  // Page hydrates last so it isn't clobbered by reset-on-filter listeners.
   if (params.has('page')) {
     const p = Number(params.get('page'));
-    if (Number.isFinite(p) && p > 0) page.set(Math.floor(p));
+    if (Number.isFinite(p) && p > 0) setPage(Math.floor(p));
   }
 }
 
 /**
- * When any refetch-triggering input changes, reset to page 1. Paging without a
- * reset is incoherent because the underlying result set just shifted.
+ * Reset the active tab's page to 1 when any input that changes the cache
+ * key changes. Other tabs keep their page.
  */
 onMount(query, () => {
-  const resetPage = () => page.set(1);
+  const resetActiveTabPage = () => setPage(1);
   const unsubs = [
-    query.listen(resetPage),
-    filters.listen(resetPage),
-    enabledSources.listen(resetPage),
-    sortBy.listen(resetPage),
-    sortOrder.listen(resetPage),
+    query.listen(resetActiveTabPage),
+    filters.listen(resetActiveTabPage),
+    sortBy.listen(resetActiveTabPage),
+    sortOrder.listen(resetActiveTabPage),
   ];
   return () => unsubs.forEach((u) => u());
 });

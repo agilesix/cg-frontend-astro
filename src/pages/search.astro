@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '@/layouts/BaseLayout.astro';
 import SearchBar from '@/components/search/SearchBar.svelte';
-import SourceToggle from '@/components/search/SourceToggle.svelte';
+import Tabs from '@/components/search/Tabs.svelte';
 import FilterPanel from '@/components/search/FilterPanel.svelte';
 import ActiveFilters from '@/components/search/ActiveFilters.svelte';
 import SortControls from '@/components/search/SortControls.svelte';
@@ -14,7 +14,7 @@ import { getSourceDescriptors } from '@/server/upstream';
 export const prerender = false;
 
 // Server-only: read configured sources from env. Pass only the serializable
-// `{id, label}[]` to islands — they don't need URLs or tokens.
+// `{id, label}[]` to islands.
 const available = getSourceDescriptors();
 ---
 
@@ -22,11 +22,11 @@ const available = getSourceDescriptors();
   <div class="grid-container padding-y-4">
     <h1>Search grant opportunities</h1>
     <SearchBar client:load />
+    <Tabs available={available} client:load />
     <FreshnessStrip available={available} client:load />
 
     <div class="grid-row grid-gap margin-top-2">
       <aside class="tablet:grid-col-3">
-        <SourceToggle available={available} client:load />
         <FilterPanel client:load />
       </aside>
 

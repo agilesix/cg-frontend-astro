@@ -1,15 +1,16 @@
 <script lang="ts">
-  import type { Tagged } from '@/client/federation/source';
+  import type { SourceId } from '@/client/federation/source';
   import Tag from '@/components/uswds/Tag.svelte';
   import { formatDate, formatFundingRange, getByPath } from '@/lib/format';
 
   interface Props {
-    opportunity: Tagged<unknown>;
+    opportunity: unknown;
+    /** Source the opportunity came from. Drives the badge + detail URL. */
+    source: SourceId;
   }
 
-  let { opportunity }: Props = $props();
+  let { opportunity, source }: Props = $props();
 
-  const source = $derived(opportunity._source);
   const sourceLabel = $derived(source === 'pa' ? 'Pennsylvania' : 'Federal');
   const sourceVariant = $derived<'source-pa' | 'source-federal'>(
     source === 'pa' ? 'source-pa' : 'source-federal',
