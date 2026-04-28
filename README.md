@@ -6,39 +6,51 @@ CommonGrants-compliant APIs in one experience. Ships with Pennsylvania (via
 
 ## What it does
 
-- One search bar, one filter set, one results list — each card shows a source
-  badge (`Pennsylvania` / `Federal`).
-- Toggle either source on/off; selection persists in URL + localStorage.
-- Server-side filters (`status`, `closeDate`, `funding`) are pushed to each API.
-- Client-side filters (e.g. PA `paCategory`, Federal agency) run in-memory
-  against the merged list — a backup for fields no API supports server-side.
-- Results cached per unique query (5 min TTL + sessionStorage). Toggling a
-  client-side filter, changing sort, or paginating never refetches.
+- One search bar, one filter set, **per-source tabs**. Switching tabs swaps the
+  active result set without losing the current query or filters.
+- A unified semantic filter model — `Status`, `Close date`, `Maximum award`,
+  `Category`, `Agency`. Each filter declares per-source field paths in
+  `portal.config.ts`; filters not mapped for the active source are hidden in
+  that tab.
+- **All filter logic lives server-side.** The browser POSTs
+  `{query, filters}` to `/api/sources/[source]/search` and gets back an
+  already-filtered list. The Worker sends `query` + `statuses` to the SDK
+  (the only fields its high-level `.search()` exposes today) and applies
+  every other filter in memory. Browser code does zero predicate work.
+- **Per-tab cache** in localStorage with a 30-minute TTL and cross-tab live
+  sync via the `storage` event — opening a second tab on the same query
+  reuses the first tab's entry, and "↻ Refresh" in one tab invalidates the
+  others.
 - Opportunity detail pages are server-rendered; URL is
-  `/opportunities/{source}/{id}` so each request routes to the right API.
+  `/opportunities/{source}/{id}` so each request routes to the right
+  upstream client.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                     Cloudflare (Workers)                      │
-│                                                               │
-│  Static (CDN edge)              SSR                           │
-│  / (landing)                    /opportunities/[source]/[id]  │
-│  /search (shell)                                              │
-│                                                               │
-│  Svelte islands  ←─── nanostores ───┐                         │
-│  SearchBar                           │                        │
-│  SourceToggle                        │                        │
-│  FilterPanel                         │                        │
-│  ActiveFilters                       │                        │
-│  SortControls                        ├── searchAll()          │
-│  ResultsList                         │      ├─ PA client      │
-│  Pagination                          │      └─ Federal client │
-│  FreshnessStrip                      │      ↳ resultCache     │
-│  UrlSync                             │                        │
-└──────────────────────────────────────┴─────────────────────────┘
-             │                                 │
-             ▼                                 ▼
-    cg-api-pa (PA state)            api.simpler.grants.gov
+┌─────────────────── Cloudflare Worker ────────────────────┐
+│                                                          │
+│  Browser  (Svelte islands + nanostores)                  │
+│    SearchBar   Tabs            ── reads/writes ─┐        │
+│    FilterPanel ResultsList                      │        │
+│    ActiveFilters Pagination     resultCache     │        │
+│    SortControls FreshnessStrip  (localStorage,  │        │
+│    UrlSync                       30-min TTL,    │        │
+│                                  cross-tab sync)│        │
+│                       │                                  │
+│                       ▼                                  │
+│  SSR routes                                              │
+│    /search                                               │
+│    /opportunities/[source]/[id]                          │
+│    /api/sources/[source]/search                          │
+│                       │                                  │
+│                       ▼                                  │
+│  Server modules                                          │
+│    server/upstream.ts        — SDK Client per source     │
+│    server/filterPushdown.ts  — pushdown vs local split   │
+└───────────────────────┼──────────────────────────────────┘
+                        ▼
+        ┌───────────────┴───────────────┐
+        ▼                               ▼
+  cg-api-pa (PA)        api.simpler.grants.gov (Federal)
 ```
 
 ## Prerequisites
@@ -67,8 +79,8 @@ cp .env.example .env
 pnpm run dev   # astro dev on http://localhost:4321
 ```
 
-Open `http://localhost:4321/search`. Both source checkboxes are enabled by
-default; uncheck either to narrow scope.
+Open `http://localhost:4321/search`. Tabs at the top switch between
+Pennsylvania and Federal; the URL syncs the active tab via `?tab=pa|federal`.
 
 ## Checks
 
@@ -127,11 +139,20 @@ Environment.
 
 - **Svelte 5 islands + nanostores.** Every island subscribes directly to the
   shared atoms — no shared context or root coordinator. See `src/stores/*.ts`.
-- **Cache key on server-side inputs only.** Client-side filter and sort changes
-  never invalidate the cache. See `src/client/federation/cache.ts`.
-- **SDK client, not custom.** `@common-grants/sdk/client` handles per-source
-  HTTP; `searchAll()` drops to `client.post()` to send full `OppFilters` and
-  preserve the `X-Data-As-Of` header.
+- **Server-side federation.** The browser POSTs `{query, filters}` to
+  `/api/sources/[source]/search` and receives an already-filtered list.
+  All predicate logic lives in `src/server/filterPushdown.ts` — a single
+  migration seam where rows flip from "applied locally in the Worker" to
+  "pushed down via the SDK" as the spec/SDK gain support for more parameters.
+- **SDK clients, per source.** `src/server/upstream.ts` constructs one
+  `@common-grants/sdk/client` `Client` per configured upstream and uses its
+  high-level `.search()` / `.get()` methods. Adding a new source is a
+  single block in `buildSourceRegistry()` — register a `Client`, add a
+  `SourceId`, and tabs / filters / the API endpoint pick it up automatically.
+- **Cache key spans the full filter set.** Because the server applies every
+  filter, the key is `{sourceId, query, filters}`. Sort and pagination are
+  client-side and never invalidate. Persisted to localStorage with cross-tab
+  `storage`-event sync; see `src/client/federation/cache.ts`.
 - **USWDS CSS** is staged into `src/styles/` and `public/uswds/` by
   `scripts/copy-uswds-assets.mjs` because the npm package doesn't export its
   compiled CSS via its `exports` map.
