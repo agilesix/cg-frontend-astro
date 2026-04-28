@@ -4,7 +4,7 @@ import OpportunityHeader from '@/components/detail/OpportunityHeader.astro';
 import KeyFactsCard from '@/components/detail/KeyFactsCard.astro';
 import OpportunityBody from '@/components/detail/OpportunityBody.astro';
 import ActionButtons from '@/components/detail/ActionButtons.astro';
-import { getFromSource } from '@/server/upstream';
+import { getFromSource, getSourceEntry } from '@/server/upstream';
 import { portalConfig } from '@/portal.config';
 import type { SourceId } from '@/client/federation/source';
 
@@ -20,9 +20,14 @@ if (!id) {
 }
 
 const sourceId = source as SourceId;
+const entry = getSourceEntry(sourceId);
+if (!entry) {
+  return Astro.redirect('/search');
+}
+
 let opportunity: unknown = null;
 try {
-  opportunity = await getFromSource(sourceId, id);
+  opportunity = await getFromSource(entry, id);
 } catch (err) {
   console.error('Failed to load opportunity', err);
   return Astro.redirect('/search');

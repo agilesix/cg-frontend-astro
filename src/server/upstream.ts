@@ -1,152 +1,123 @@
-// Server-only module: fans out CommonGrants requests to configured upstream
-// APIs. Reads `process.env` at runtime (no build-time inlining), so the
-// browser bundle never sees URLs or tokens.
+// Server-only: per-source search via the SDK's high-level methods, with
+// filter logic centralized here. The browser sends `{query, filters}`
+// verbatim; this module decides what flows into `.search()` vs what's
+// applied in memory after.
 //
-// The browser-side equivalent is just `fetch('/api/search', ...)` — all the
-// per-source URL composition, auth header injection, and response merging
-// happens here, behind a single same-origin endpoint.
+// Adding a new source (e.g. NY) is a one-block change in
+// `buildSourceRegistry`: construct a `Client` and register it.
 
-import type { OppFilters, OppSorting } from '@common-grants/sdk/types';
-import type { SourceId, Tagged } from '@/client/federation/source';
+import { Client, Auth } from '@common-grants/sdk/client';
+import type { SourceId } from '@/client/federation/source';
+import {
+  pickPushdownFilters,
+  pickLocalFilters,
+  applyLocalFilters,
+  type FilterMap,
+} from './filterPushdown';
 
-interface SourceConfig {
+export interface SourceEntry {
   id: SourceId;
   label: string;
-  url: string;
-  token?: string;
+  client: Client;
 }
 
-export interface SearchRequest {
-  search?: string;
-  filters?: OppFilters;
-  sorting?: OppSorting;
-  /** Subset of configured source IDs to query. Defaults to all configured. */
-  enabledSources?: SourceId[];
-  /** Cap per-source fetch size; we paginate client-side. */
-  pageSize?: number;
-}
+function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
+  const out: Partial<Record<SourceId, SourceEntry>> = {};
 
-export type BySource = Record<SourceId, { total: number; dataAsOf: string | null; error?: string }>;
-
-export interface SearchResult {
-  items: Array<Tagged<unknown>>;
-  bySource: BySource;
-}
-
-export function getConfiguredSources(): SourceConfig[] {
-  const out: SourceConfig[] = [];
   const paUrl = process.env.PA_API_URL ?? process.env.PUBLIC_PA_API_URL;
-  if (paUrl) out.push({ id: 'pa', label: 'Pennsylvania', url: paUrl });
+  if (paUrl) {
+    out.pa = {
+      id: 'pa',
+      label: 'Pennsylvania',
+      client: new Client({ baseUrl: paUrl, auth: Auth.none() }),
+    };
+  }
 
   const fedUrl = process.env.FEDERAL_API_URL ?? process.env.PUBLIC_FEDERAL_API_URL;
-  if (fedUrl)
-    out.push({
+  if (fedUrl) {
+    const token = process.env.FEDERAL_API_TOKEN;
+    out.federal = {
       id: 'federal',
       label: 'Federal (Grants.gov)',
-      url: fedUrl,
-      token: process.env.FEDERAL_API_TOKEN,
-    });
+      client: new Client({
+        baseUrl: fedUrl,
+        auth: token ? Auth.apiKey(token) : Auth.none(),
+      }),
+    };
+  }
+
   return out;
 }
 
+// Built once per isolate; the registry never changes after startup.
+const REGISTRY = buildSourceRegistry();
+
+export function getSourceEntry(id: SourceId): SourceEntry | undefined {
+  return REGISTRY[id];
+}
+
 export function getSourceDescriptors(): Array<{ id: SourceId; label: string }> {
-  return getConfiguredSources().map(({ id, label }) => ({ id, label }));
+  return Object.values(REGISTRY)
+    .filter((e): e is SourceEntry => e !== undefined)
+    .map(({ id, label }) => ({ id, label }));
 }
 
-const EMPTY_BY_SOURCE: BySource = {
-  pa: { total: 0, dataAsOf: null },
-  federal: { total: 0, dataAsOf: null },
-};
-
-function buildHeaders(src: SourceConfig): Headers {
-  const h = new Headers({ 'Content-Type': 'application/json' });
-  if (src.token) h.set('X-API-Key', src.token);
-  return h;
+export interface SourceSearchRequest {
+  query?: string;
+  filters?: FilterMap;
+  /** Cap per-source fetch size; client paginates over the result. */
+  pageSize?: number;
 }
 
-function joinUrl(base: string, path: string): string {
-  return `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+export interface SourceSearchResult {
+  items: unknown[];
+  total: number;
+  dataAsOf: string | null;
 }
-
-export async function searchAcrossSources(req: SearchRequest): Promise<SearchResult> {
-  const sources = getConfiguredSources().filter(
-    (s) => !req.enabledSources || req.enabledSources.includes(s.id),
-  );
-
-  const settled = await Promise.allSettled(
-    sources.map(async (src) => {
-      const res = await fetch(joinUrl(src.url, '/common-grants/opportunities/search'), {
-        method: 'POST',
-        headers: buildHeaders(src),
-        body: JSON.stringify({
-          search: req.search || undefined,
-          filters: req.filters,
-          sorting: req.sorting,
-          pagination: { page: 1, pageSize: req.pageSize ?? 100 },
-        }),
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          console.warn(`[${src.label}] ${res.status} ${res.statusText}; skipping this source.`);
-          return { src, items: [] as unknown[], total: 0, dataAsOf: null as string | null };
-        }
-        throw new Error(`${src.label} returned ${res.status}`);
-      }
-      const json = (await res.json()) as {
-        items?: unknown[];
-        paginationInfo?: { totalItems?: number };
-      };
-      return {
-        src,
-        items: json.items ?? [],
-        total: json.paginationInfo?.totalItems ?? json.items?.length ?? 0,
-        dataAsOf: res.headers.get('X-Data-As-Of'),
-      };
-    }),
-  );
-
-  const items: Array<Tagged<unknown>> = [];
-  const bySource: BySource = { ...EMPTY_BY_SOURCE };
-
-  settled.forEach((r, i) => {
-    const src = sources[i]!;
-    if (r.status === 'rejected') {
-      bySource[src.id] = {
-        total: 0,
-        dataAsOf: null,
-        error: r.reason instanceof Error ? r.reason.message : String(r.reason),
-      };
-      return;
-    }
-    for (const item of r.value.items) {
-      items.push({ ...(item as object), _source: src.id } as Tagged<unknown>);
-    }
-    bySource[src.id] = { total: r.value.total, dataAsOf: r.value.dataAsOf };
-  });
-
-  return { items, bySource };
-}
-
-// ==========================================================================
-//
 
 /**
- * Single-opportunity fetch. Tolerates either spec-compliant
- * `{status, message, data}` or the raw-opportunity response shape.
+ * Single-source search. Pushes the supported filters into the SDK call,
+ * applies the rest in memory.
  */
-export async function getFromSource(sourceId: SourceId, id: string): Promise<unknown | null> {
-  const src = getConfiguredSources().find((s) => s.id === sourceId);
-  if (!src) throw new Error(`Source ${sourceId} is not configured`);
+export async function searchSource(
+  source: SourceEntry,
+  req: SourceSearchRequest,
+): Promise<SourceSearchResult> {
+  const pushdown = pickPushdownFilters(req.filters);
+  const local = pickLocalFilters(req.filters, source.id);
 
-  const res = await fetch(
-    joinUrl(src.url, `/common-grants/opportunities/${encodeURIComponent(id)}`),
-    { headers: buildHeaders(src) },
-  );
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`${src.label} returned ${res.status} for get(${id})`);
+  const result = await source.client.opportunities.search({
+    query: req.query || undefined,
+    statuses: pushdown.statuses,
+    page: 1,
+    pageSize: req.pageSize ?? 100,
+  });
 
-  const body: unknown = await res.json();
-  return body && typeof body === 'object' && 'data' in body
-    ? (body as { data: unknown }).data
-    : body;
+  const filtered = applyLocalFilters(result.items, local);
+
+  return {
+    items: filtered,
+    // `total` reflects the post-local-filter count so the UI's "N results"
+    // matches what's visible. The upstream's `paginationInfo.totalItems`
+    // is the pre-filter total; useful but a different number.
+    total: filtered.length,
+    // SDK's .search() doesn't surface the X-Data-As-Of header. Accepted
+    // tradeoff for using the high-level method; can be revisited if the
+    // SDK exposes the raw Response or returns headers.
+    dataAsOf: null,
+  };
+}
+
+/**
+ * Single-opportunity fetch via the SDK's `.get()`. Returns null on 404 so
+ * the detail page can redirect to /search.
+ */
+export async function getFromSource(source: SourceEntry, id: string): Promise<unknown | null> {
+  try {
+    return await source.client.opportunities.get(id);
+  } catch (err) {
+    // SDK throws a generic Error with the status in the message; sniff for 404.
+    if (err instanceof Error && /\b404\b/.test(err.message)) return null;
+    throw err;
+  }
 }

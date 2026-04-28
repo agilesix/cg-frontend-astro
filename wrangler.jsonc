@@ -9,5 +9,5 @@
   // Without this file the vite plugin defaults `compatibility_date` to
   // today, which can be newer than the bundled workerd supports.
   "compatibility_date": "2026-03-20",
-  "compatibility_flags": ["nodejs_compat"]
+  "compatibility_flags": ["nodejs_compat"],
 }

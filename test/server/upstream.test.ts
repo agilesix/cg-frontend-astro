@@ -1,13 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const ORIGINAL_FETCH = globalThis.fetch;
-
-function jsonResponse(body: unknown, headers: Record<string, string> = {}, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
-}
+import type { Client } from '@common-grants/sdk/client';
+import type { SourceEntry } from '@/server/upstream';
 
 beforeEach(() => {
   vi.resetModules();
@@ -17,154 +10,138 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = ORIGINAL_FETCH;
   delete process.env.PA_API_URL;
   delete process.env.FEDERAL_API_URL;
   delete process.env.FEDERAL_API_TOKEN;
 });
 
-describe('searchAcrossSources', () => {
-  it('fans out to both sources and tags items with _source', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('pa.example')) {
-        return jsonResponse(
-          { items: [{ id: 'pa-1' }, { id: 'pa-2' }], paginationInfo: { totalItems: 2 } },
-          { 'X-Data-As-Of': '2026-04-27T00:00:00Z' },
-        );
-      }
-      return jsonResponse({ items: [{ id: 'fed-1' }], paginationInfo: { totalItems: 1 } });
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+function makeMockEntry(
+  searchImpl: (
+    opts: unknown,
+  ) => Promise<{ items: unknown[]; paginationInfo?: { totalItems?: number } }>,
+): SourceEntry {
+  const search = vi.fn(searchImpl);
+  return {
+    id: 'pa',
+    label: 'Pennsylvania',
+    client: { opportunities: { search } } as unknown as Client,
+  };
+}
 
-    const { searchAcrossSources } = await import('@/server/upstream');
-    const result = await searchAcrossSources({});
+describe('searchSource', () => {
+  it("calls SDK's .search() with pushdown filters and pagination", async () => {
+    const search = vi.fn(async () => ({
+      items: [{ id: 'x' }],
+      paginationInfo: { totalItems: 1 },
+    }));
+    const entry: SourceEntry = {
+      id: 'pa',
+      label: 'PA',
+      client: { opportunities: { search } } as unknown as Client,
+    };
 
-    expect(result.items).toHaveLength(3);
-    expect(result.items.filter((i) => i._source === 'pa')).toHaveLength(2);
-    expect(result.items.filter((i) => i._source === 'federal')).toHaveLength(1);
-    expect(result.bySource.pa.dataAsOf).toBe('2026-04-27T00:00:00Z');
-    expect(result.bySource.federal.dataAsOf).toBeNull();
-  });
-
-  it('forwards X-API-Key only to federal', async () => {
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
-      jsonResponse({ items: [], paginationInfo: { totalItems: 0 } }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const { searchAcrossSources } = await import('@/server/upstream');
-    await searchAcrossSources({});
-
-    const calls = fetchMock.mock.calls as Array<[string, RequestInit?]>;
-    const paCall = calls.find(([u]) => u.includes('pa.example'))!;
-    const fedCall = calls.find(([u]) => u.includes('federal.example'))!;
-    expect(new Headers(paCall[1]?.headers).get('X-API-Key')).toBeNull();
-    expect(new Headers(fedCall[1]?.headers).get('X-API-Key')).toBe('tok');
-  });
-
-  it('treats 401 as silent skip (no user-visible error, logs warn)', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('federal.example')) {
-        return jsonResponse({ message: 'Unauthorized' }, {}, 401);
-      }
-      return jsonResponse({ items: [{ id: 'pa-1' }], paginationInfo: { totalItems: 1 } });
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const { searchAcrossSources } = await import('@/server/upstream');
-    const result = await searchAcrossSources({});
-
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]?._source).toBe('pa');
-    expect(result.bySource.federal.error).toBeUndefined();
-    expect(result.bySource.federal.total).toBe(0);
-    expect(warnSpy).toHaveBeenCalledOnce();
-    warnSpy.mockRestore();
-  });
-
-  it('tolerates one source failing — other source still returns', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url.includes('pa.example')) throw new Error('boom');
-      return jsonResponse({ items: [{ id: 'fed-1' }], paginationInfo: { totalItems: 1 } });
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const { searchAcrossSources } = await import('@/server/upstream');
-    const result = await searchAcrossSources({});
-
-    expect(result.items).toHaveLength(1);
-    expect(result.items[0]?._source).toBe('federal');
-    expect(result.bySource.pa.error).toBe('boom');
-  });
-
-  it('honors enabledSources to skip a configured source', async () => {
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({ items: [], paginationInfo: { totalItems: 0 } }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const { searchAcrossSources } = await import('@/server/upstream');
-    await searchAcrossSources({ enabledSources: ['pa'] });
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url] = fetchMock.mock.calls[0] as unknown as [string];
-    expect(url).toContain('pa.example');
-  });
-
-  it('sends search/filters/sorting/pagination in body', async () => {
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({ items: [], paginationInfo: { totalItems: 0 } }),
-    );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    const { searchAcrossSources } = await import('@/server/upstream');
-    await searchAcrossSources({
-      search: 'agriculture',
-      filters: { status: { operator: 'in', value: ['open'] } },
-      sorting: { sortBy: 'keyDates.closeDate', sortOrder: 'asc' },
-      enabledSources: ['pa'],
+    const { searchSource } = await import('@/server/upstream');
+    const result = await searchSource(entry, {
+      query: 'agriculture',
+      filters: { status: ['open'] },
       pageSize: 50,
     });
 
-    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    const body = JSON.parse(String(init.body));
-    expect(body).toEqual({
-      search: 'agriculture',
-      filters: { status: { operator: 'in', value: ['open'] } },
-      sorting: { sortBy: 'keyDates.closeDate', sortOrder: 'asc' },
-      pagination: { page: 1, pageSize: 50 },
+    expect(search).toHaveBeenCalledWith({
+      query: 'agriculture',
+      statuses: ['open'],
+      page: 1,
+      pageSize: 50,
     });
+    expect(result.items).toEqual([{ id: 'x' }]);
+    expect(result.total).toBe(1);
+    expect(result.dataAsOf).toBeNull();
+  });
+
+  it('does not pass `query` when empty', async () => {
+    const search = vi.fn(async () => ({ items: [], paginationInfo: { totalItems: 0 } }));
+    const entry = makeMockEntry(search);
+    const { searchSource } = await import('@/server/upstream');
+    await searchSource(entry, { query: '', filters: {} });
+    const [args] = search.mock.calls[0] as unknown as [{ query?: string; statuses?: unknown }];
+    expect(args).toMatchObject({ query: undefined, statuses: undefined });
+  });
+
+  it('applies local filters in memory after the SDK call', async () => {
+    // Returns 3 items; closeDate filter narrows to 2.
+    const search = vi.fn(async () => ({
+      items: [
+        { id: 'a', keyDates: { closeDate: '2026-06-15' } },
+        { id: 'b', keyDates: { closeDate: '2026-08-15' } },
+        { id: 'c', keyDates: { closeDate: '2026-10-15' } },
+      ],
+      paginationInfo: { totalItems: 3 },
+    }));
+    const entry = makeMockEntry(search);
+    const { searchSource } = await import('@/server/upstream');
+
+    const result = await searchSource(entry, {
+      filters: { closeDate: { start: '2026-06-01', end: '2026-09-01' } },
+    });
+
+    expect(result.items).toHaveLength(2);
+    expect((result.items as Array<{ id: string }>).map((i) => i.id)).toEqual(['a', 'b']);
+    expect(result.total).toBe(2);
+  });
+
+  it('handles 401/403 from upstream by propagating the error (endpoint catches)', async () => {
+    const search = vi.fn(async () => {
+      throw new Error('Upstream returned 401');
+    });
+    const entry = makeMockEntry(search);
+    const { searchSource } = await import('@/server/upstream');
+    await expect(searchSource(entry, {})).rejects.toThrow(/401/);
   });
 });
 
 describe('getFromSource', () => {
-  it('unwraps `{data}` envelope when present', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      jsonResponse({ status: 200, message: 'OK', data: { id: 'x', title: 'Hello' } }),
-    ) as unknown as typeof fetch;
-
+  it('returns the SDK result on success', async () => {
+    const get = vi.fn(async () => ({ id: 'x', title: 'Hello' }));
+    const entry: SourceEntry = {
+      id: 'pa',
+      label: 'PA',
+      client: { opportunities: { get } } as unknown as Client,
+    };
     const { getFromSource } = await import('@/server/upstream');
-    const opp = await getFromSource('pa', 'x');
-    expect(opp).toEqual({ id: 'x', title: 'Hello' });
+    expect(await getFromSource(entry, 'x')).toEqual({ id: 'x', title: 'Hello' });
   });
 
-  it('returns the body as-is for raw-opportunity responses', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      jsonResponse({ id: 'x', title: 'Hello' }),
-    ) as unknown as typeof fetch;
-
+  it('returns null on 404 (sniffed from error message)', async () => {
+    const get = vi.fn(async () => {
+      throw new Error('Upstream returned 404');
+    });
+    const entry: SourceEntry = {
+      id: 'pa',
+      label: 'PA',
+      client: { opportunities: { get } } as unknown as Client,
+    };
     const { getFromSource } = await import('@/server/upstream');
-    const opp = await getFromSource('pa', 'x');
-    expect(opp).toEqual({ id: 'x', title: 'Hello' });
+    expect(await getFromSource(entry, 'missing')).toBeNull();
   });
 
-  it('returns null on 404', async () => {
-    globalThis.fetch = vi.fn(async () =>
-      jsonResponse({}, {}, 404),
-    ) as unknown as typeof fetch;
-
+  it('rethrows non-404 errors', async () => {
+    const get = vi.fn(async () => {
+      throw new Error('Upstream returned 500');
+    });
+    const entry: SourceEntry = {
+      id: 'pa',
+      label: 'PA',
+      client: { opportunities: { get } } as unknown as Client,
+    };
     const { getFromSource } = await import('@/server/upstream');
-    expect(await getFromSource('pa', 'missing')).toBeNull();
+    await expect(getFromSource(entry, 'x')).rejects.toThrow(/500/);
+  });
+});
+
+describe('getSourceDescriptors', () => {
+  it('returns only configured sources', async () => {
+    delete process.env.FEDERAL_API_URL;
+    const { getSourceDescriptors } = await import('@/server/upstream');
+    expect(getSourceDescriptors()).toEqual([{ id: 'pa', label: 'Pennsylvania' }]);
   });
 });
