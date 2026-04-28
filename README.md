@@ -86,11 +86,11 @@ default; uncheck either to narrow scope.
 
 ## Environment variables
 
-| Name                     | Required | Purpose                                                     |
-| :----------------------- | :------- | :---------------------------------------------------------- |
-| `PUBLIC_PA_API_URL`      | optional | Base URL of the PA CommonGrants API (build-time inlined)    |
-| `PUBLIC_FEDERAL_API_URL` | optional | Base URL of the federal CommonGrants API (build-time)       |
-| `FEDERAL_API_TOKEN`      | optional | API key for the federal API; server-only, never bundled     |
+| Name                     | Required | Purpose                                                  |
+| :----------------------- | :------- | :------------------------------------------------------- |
+| `PUBLIC_PA_API_URL`      | optional | Base URL of the PA CommonGrants API (build-time inlined) |
+| `PUBLIC_FEDERAL_API_URL` | optional | Base URL of the federal CommonGrants API (build-time)    |
+| `FEDERAL_API_TOKEN`      | optional | API key for the federal API; server-only, never bundled  |
 
 `PUBLIC_*` URLs are public so Vite inlines them at build time via
 `import.meta.env`. `FEDERAL_API_TOKEN` is a secret and stays in `process.env`
