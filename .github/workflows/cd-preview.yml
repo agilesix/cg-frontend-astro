@@ -1,0 +1,86 @@
+name: Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    name: Deploy preview
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # Preview env mirrors production env vars unless a PREVIEW_-prefixed
+        # repo var overrides. Lets us point a PR at a staging upstream
+        # without disturbing production.
+        env:
+          PUBLIC_PA_API_URL: ${{ vars.PREVIEW_PUBLIC_PA_API_URL || vars.PUBLIC_PA_API_URL }}
+          PUBLIC_FEDERAL_API_URL: ${{ vars.PREVIEW_PUBLIC_FEDERAL_API_URL || vars.PUBLIC_FEDERAL_API_URL }}
+        run: pnpm run build
+
+      - name: Deploy preview Worker
+        id: preview
+        env:
+          # Make secrets available to the script so it can call
+          # `wrangler secret put`. The script gates on whether each is set.
+          FEDERAL_API_URL: ${{ vars.PREVIEW_FEDERAL_API_URL || vars.FEDERAL_API_URL }}
+          FEDERAL_API_TOKEN: ${{ secrets.PREVIEW_FEDERAL_API_TOKEN || secrets.FEDERAL_API_TOKEN }}
+        run: ./scripts/preview-create.sh "pr-${{ github.event.pull_request.number }}"
+
+      - name: Comment preview URL
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-deploy
+          message: |
+            **Preview deployed** for PR #${{ github.event.pull_request.number }}
+            🔗 **${{ steps.preview.outputs.url }}**
+            Worker: `${{ steps.preview.outputs.worker_name }}`
+            Commit: `${{ github.sha }}`
+
+  cleanup:
+    name: Clean up preview
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Delete preview Worker
+        run: ./scripts/preview-cleanup.sh "pr-${{ github.event.pull_request.number }}"
+
+      - name: Update comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: preview-deploy
+          message: |
+            **Preview removed** for PR #${{ github.event.pull_request.number }}
+            The preview Worker has been cleaned up.

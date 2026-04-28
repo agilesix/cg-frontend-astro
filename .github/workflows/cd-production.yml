@@ -1,0 +1,77 @@
+name: Production Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Defense in depth: re-run CI before deploying in case of direct push to main.
+      - name: Run CI
+        run: pnpm run ci
+
+      - name: Build
+        # `PUBLIC_*` vars are inlined into the client bundle by Vite.
+        # `FEDERAL_API_URL` / `FEDERAL_API_TOKEN` stay server-only and reach
+        # the deployed Worker via `wrangler secret put` (next step), not as
+        # build-time env here.
+        env:
+          PUBLIC_PA_API_URL: ${{ vars.PUBLIC_PA_API_URL }}
+          PUBLIC_FEDERAL_API_URL: ${{ vars.PUBLIC_FEDERAL_API_URL }}
+        run: pnpm run build
+
+      - name: Deploy Worker
+        run: pnpm exec wrangler deploy --config dist/server/wrangler.json
+
+      - name: Set Worker secrets
+        # Re-applied on every deploy so secret rotations only require updating
+        # the GitHub repo secret. `wrangler secret put` is idempotent.
+        run: |
+          if [ -n "${{ secrets.FEDERAL_API_TOKEN }}" ]; then
+            echo "${{ secrets.FEDERAL_API_TOKEN }}" \
+              | pnpm exec wrangler secret put FEDERAL_API_TOKEN \
+                  --config dist/server/wrangler.json
+          fi
+          if [ -n "${{ vars.FEDERAL_API_URL }}" ]; then
+            echo "${{ vars.FEDERAL_API_URL }}" \
+              | pnpm exec wrangler secret put FEDERAL_API_URL \
+                  --config dist/server/wrangler.json
+          fi
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "## Production deployment"
+            echo ""
+            echo "| Item | Value |"
+            echo "| --- | --- |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Actor | @${{ github.actor }} |"
+            echo "| PUBLIC_PA_API_URL | \`${{ vars.PUBLIC_PA_API_URL || '(unset)' }}\` |"
+            echo "| PUBLIC_FEDERAL_API_URL | \`${{ vars.PUBLIC_FEDERAL_API_URL || '(unset)' }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
