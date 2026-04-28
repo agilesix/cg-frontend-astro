@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Pin compatibility settings only. The `@astrojs/cloudflare` adapter
+  // generates the rest of the Worker config (main, assets, etc.) into
+  // `dist/server/wrangler.json` during build — leaving those out here keeps
+  // dev (`@cloudflare/vite-plugin` reads this file) and build (the adapter
+  // owns the deploy config) from fighting over the same fields.
+  //
+  // Without this file the vite plugin defaults `compatibility_date` to
+  // today, which can be newer than the bundled workerd supports.
+  "compatibility_date": "2026-03-20",
+  "compatibility_flags": ["nodejs_compat"]
+}
