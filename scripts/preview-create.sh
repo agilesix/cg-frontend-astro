@@ -12,8 +12,7 @@ set -euo pipefail
 #   ./scripts/preview-create.sh pr-42       # CI uses the PR number
 #   ./scripts/preview-create.sh my-feature  # local testing
 #
-# Expected env (optional — secrets pass-through if set):
-#   FEDERAL_API_URL    server-only Worker var
+# Expected env (optional — passed through to the Worker if set):
 #   FEDERAL_API_TOKEN  server-only Worker secret
 #
 # Expected pre-state:
@@ -49,12 +48,6 @@ echo "  ✓ Deployed: ${PREVIEW_URL:-unknown}"
 # -------------------------------------------------------------------------
 # 2. Apply server-only secrets to this Worker (idempotent)
 # -------------------------------------------------------------------------
-
-if [ -n "${FEDERAL_API_URL:-}" ]; then
-  echo "→ Setting FEDERAL_API_URL on ${WORKER_NAME}"
-  echo "${FEDERAL_API_URL}" \
-    | ${WRANGLER} secret put FEDERAL_API_URL --name "${WORKER_NAME}"
-fi
 
 if [ -n "${FEDERAL_API_TOKEN:-}" ]; then
   echo "→ Setting FEDERAL_API_TOKEN on ${WORKER_NAME}"

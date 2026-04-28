@@ -4,14 +4,15 @@ import type { SourceEntry } from '@/server/upstream';
 
 beforeEach(() => {
   vi.resetModules();
-  process.env.PA_API_URL = 'https://pa.example';
-  process.env.FEDERAL_API_URL = 'https://federal.example';
+  // URLs flow through `import.meta.env` (Vite inlines `PUBLIC_*` at build);
+  // `vi.stubEnv` updates both `process.env` and `import.meta.env` in vitest.
+  vi.stubEnv('PUBLIC_PA_API_URL', 'https://pa.example');
+  vi.stubEnv('PUBLIC_FEDERAL_API_URL', 'https://federal.example');
   process.env.FEDERAL_API_TOKEN = 'tok';
 });
 
 afterEach(() => {
-  delete process.env.PA_API_URL;
-  delete process.env.FEDERAL_API_URL;
+  vi.unstubAllEnvs();
   delete process.env.FEDERAL_API_TOKEN;
 });
 
@@ -140,7 +141,7 @@ describe('getFromSource', () => {
 
 describe('getSourceDescriptors', () => {
   it('returns only configured sources', async () => {
-    delete process.env.FEDERAL_API_URL;
+    vi.stubEnv('PUBLIC_FEDERAL_API_URL', '');
     const { getSourceDescriptors } = await import('@/server/upstream');
     expect(getSourceDescriptors()).toEqual([{ id: 'pa', label: 'Pennsylvania' }]);
   });

@@ -17,6 +17,11 @@ jobs:
     name: Deploy preview
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    # Bind to the `preview` GitHub Environment so `vars` and `secrets`
+    # resolve to its overrides where set, falling back to repo-level
+    # values otherwise. Configure preview-specific values in repo
+    # Settings → Environments → preview.
+    environment: preview
     permissions:
       contents: read
       pull-requests: write
@@ -31,21 +36,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build
-        # Preview env mirrors production env vars unless a PREVIEW_-prefixed
-        # repo var overrides. Lets us point a PR at a staging upstream
-        # without disturbing production.
         env:
-          PUBLIC_PA_API_URL: ${{ vars.PREVIEW_PUBLIC_PA_API_URL || vars.PUBLIC_PA_API_URL }}
-          PUBLIC_FEDERAL_API_URL: ${{ vars.PREVIEW_PUBLIC_FEDERAL_API_URL || vars.PUBLIC_FEDERAL_API_URL }}
+          PUBLIC_PA_API_URL: ${{ vars.PUBLIC_PA_API_URL }}
+          PUBLIC_FEDERAL_API_URL: ${{ vars.PUBLIC_FEDERAL_API_URL }}
         run: pnpm run build
 
       - name: Deploy preview Worker
         id: preview
         env:
-          # Make secrets available to the script so it can call
-          # `wrangler secret put`. The script gates on whether each is set.
-          FEDERAL_API_URL: ${{ vars.PREVIEW_FEDERAL_API_URL || vars.FEDERAL_API_URL }}
-          FEDERAL_API_TOKEN: ${{ secrets.PREVIEW_FEDERAL_API_TOKEN || secrets.FEDERAL_API_TOKEN }}
+          FEDERAL_API_TOKEN: ${{ secrets.FEDERAL_API_TOKEN }}
         run: ./scripts/preview-create.sh "pr-${{ github.event.pull_request.number }}"
 
       - name: Comment preview URL

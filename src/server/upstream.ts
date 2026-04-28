@@ -24,7 +24,12 @@ export interface SourceEntry {
 function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
   const out: Partial<Record<SourceId, SourceEntry>> = {};
 
-  const paUrl = process.env.PA_API_URL ?? process.env.PUBLIC_PA_API_URL;
+  // URLs are public — read via `import.meta.env` so Vite inlines them at
+  // build time. This also makes them available at runtime in the Workers
+  // bundle without needing to set them as Worker vars. The token, by
+  // contrast, is a secret and stays in `process.env` so it's resolved
+  // from the Worker's secret bindings at runtime.
+  const paUrl = import.meta.env.PUBLIC_PA_API_URL;
   if (paUrl) {
     out.pa = {
       id: 'pa',
@@ -33,7 +38,7 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     };
   }
 
-  const fedUrl = process.env.FEDERAL_API_URL ?? process.env.PUBLIC_FEDERAL_API_URL;
+  const fedUrl = import.meta.env.PUBLIC_FEDERAL_API_URL;
   if (fedUrl) {
     const token = process.env.FEDERAL_API_TOKEN;
     out.federal = {

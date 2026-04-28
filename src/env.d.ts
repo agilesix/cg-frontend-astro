@@ -22,7 +22,6 @@ interface ImportMeta {
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
-      FEDERAL_API_URL?: string;
       FEDERAL_API_TOKEN?: string;
     }
   }

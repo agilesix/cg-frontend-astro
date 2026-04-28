@@ -61,8 +61,9 @@ cd cg-astro
 pnpm install
 cp .env.example .env
 # Edit .env:
-#   PA_API_URL=http://localhost:8787    (or a deployed PA URL)
-#   FEDERAL_API_URL=https://api.simpler.grants.gov
+#   PUBLIC_PA_API_URL=http://localhost:8787    (or a deployed PA URL)
+#   PUBLIC_FEDERAL_API_URL=https://api.simpler.grants.gov
+#   FEDERAL_API_TOKEN=<your-grants.gov-key>    (optional)
 pnpm run dev   # astro dev on http://localhost:4321
 ```
 
@@ -85,30 +86,42 @@ default; uncheck either to narrow scope.
 
 ## Environment variables
 
-| Name              | Required | Purpose                                  |
-| :---------------- | :------- | :--------------------------------------- |
-| `PA_API_URL`      | optional | Base URL of the PA CommonGrants API      |
-| `FEDERAL_API_URL` | optional | Base URL of the federal CommonGrants API |
+| Name                     | Required | Purpose                                                     |
+| :----------------------- | :------- | :---------------------------------------------------------- |
+| `PUBLIC_PA_API_URL`      | optional | Base URL of the PA CommonGrants API (build-time inlined)    |
+| `PUBLIC_FEDERAL_API_URL` | optional | Base URL of the federal CommonGrants API (build-time)       |
+| `FEDERAL_API_TOKEN`      | optional | API key for the federal API; server-only, never bundled     |
 
-At least one must be set for the search page to return results. Both unset is
-allowed at build time (static prerender) but produces an empty results list at
-runtime.
+`PUBLIC_*` URLs are public so Vite inlines them at build time via
+`import.meta.env`. `FEDERAL_API_TOKEN` is a secret and stays in `process.env`
+— it's resolved at runtime from the Worker's secret bindings.
+
+At least one URL must be set for the search page to return results. Both
+unset is allowed at build time but produces an empty results list at runtime.
 
 ## Deployment
 
-CI (`.github/workflows/ci.yml`) runs typecheck, lint, format, test, audit, and
-build on every PR. CD (`.github/workflows/cd.yml`) deploys to Cloudflare on
-merges to `main`.
+- `.github/workflows/ci.yml` runs typecheck, lint, format, test, audit, and
+  build on every PR.
+- `.github/workflows/cd-production.yml` deploys to Cloudflare on merges to
+  `main` (bound to the `production` GitHub Environment).
+- `.github/workflows/cd-preview.yml` deploys a per-PR preview Worker (bound
+  to the `preview` GitHub Environment) and tears it down on PR close.
 
 Required repo secrets:
 
 - `CLOUDFLARE_API_TOKEN` (Workers:Edit)
 - `CLOUDFLARE_ACCOUNT_ID`
+- `FEDERAL_API_TOKEN` (optional — only if hitting the federal API)
 
 Required repo variables:
 
-- `PA_API_URL`
-- `FEDERAL_API_URL`
+- `PUBLIC_PA_API_URL`
+- `PUBLIC_FEDERAL_API_URL`
+
+To point preview deploys at staging upstreams without touching production,
+override the same variable / secret names inside the `preview` GitHub
+Environment.
 
 ## Architecture notes
 

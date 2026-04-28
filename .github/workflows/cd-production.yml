@@ -35,10 +35,10 @@ jobs:
         run: pnpm run ci
 
       - name: Build
-        # `PUBLIC_*` vars are inlined into the client bundle by Vite.
-        # `FEDERAL_API_URL` / `FEDERAL_API_TOKEN` stay server-only and reach
-        # the deployed Worker via `wrangler secret put` (next step), not as
-        # build-time env here.
+        # `PUBLIC_*` vars are inlined into the client bundle by Vite at build
+        # time. `FEDERAL_API_TOKEN` is the only server-only secret; it reaches
+        # the deployed Worker via `wrangler secret put` (next step), not via
+        # build-time env.
         env:
           PUBLIC_PA_API_URL: ${{ vars.PUBLIC_PA_API_URL }}
           PUBLIC_FEDERAL_API_URL: ${{ vars.PUBLIC_FEDERAL_API_URL }}
@@ -54,11 +54,6 @@ jobs:
           if [ -n "${{ secrets.FEDERAL_API_TOKEN }}" ]; then
             echo "${{ secrets.FEDERAL_API_TOKEN }}" \
               | pnpm exec wrangler secret put FEDERAL_API_TOKEN \
-                  --config dist/server/wrangler.json
-          fi
-          if [ -n "${{ vars.FEDERAL_API_URL }}" ]; then
-            echo "${{ vars.FEDERAL_API_URL }}" \
-              | pnpm exec wrangler secret put FEDERAL_API_URL \
                   --config dist/server/wrangler.json
           fi
 
