@@ -15,6 +15,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "deploy": "wrangler deploy --config dist/server/wrangler.json",
     "astro": "astro",
     "copy-assets": "node scripts/copy-uswds-assets.mjs",
     "lint": "eslint . --fix",

@@ -45,7 +45,7 @@ jobs:
         run: pnpm run build
 
       - name: Deploy Worker
-        run: pnpm exec wrangler deploy --config dist/server/wrangler.json
+        run: pnpm run deploy
 
       - name: Set Worker secrets
         # Re-applied on every deploy so secret rotations only require updating
