@@ -1,14 +1,16 @@
 import { defineMiddleware } from 'astro:middleware';
-import { createSources } from '@/client';
+import { createServerSources } from '@/client';
 import type { Source } from '@/client/federation/source';
 
-// Server-side source list, rebuilt once per isolate. The SSR detail page
-// reads this from context.locals; the search page's islands build their own
-// client-side (see @/client/index.ts for why they can't share this one).
+// Server-side source list, rebuilt once per isolate. Federal is wired with
+// the real upstream URL + `Auth.apiKey()` for SSR code; the search-page
+// islands build their own browser-side via `createBrowserSources()`, which
+// routes federal through `/api/proxy/federal/*` to keep the token off the
+// client.
 let cached: Source[] | null = null;
 
 export const onRequest = defineMiddleware((context, next) => {
-  cached ??= createSources();
+  cached ??= createServerSources();
   context.locals.sources = cached;
   return next();
 });

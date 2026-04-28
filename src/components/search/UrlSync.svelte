@@ -2,12 +2,12 @@
   import { onMount } from 'svelte';
   import { urlParams, hydrateStoresFromUrl } from '@/stores/searchStore';
   import { fetchResults } from '@/stores/resultsStore';
-  import { createSources } from '@/client';
+  import { createBrowserSources } from '@/client';
 
   // Sources are built client-side rather than passed in as a prop because a
   // Source contains a live SDK Client (not JSON-serializable) — Astro would
   // silently strip the prop on island hydration.
-  const sources = createSources();
+  const sources = createBrowserSources();
 
   onMount(() => {
     hydrateStoresFromUrl(window.location.search);

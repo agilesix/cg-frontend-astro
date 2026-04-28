@@ -5,59 +5,95 @@ import { PaOpportunitySchema } from './adapters/pa';
 import type { Source, SourceId } from './federation/source';
 
 /**
- * Build the configured Source list from environment variables. Works from
- * both server (SSR middleware) and client (Svelte islands) contexts — the env
- * vars use the PUBLIC_ prefix so Astro inlines them into the client bundle.
+ * Build the configured Source list.
  *
- * Sources contain a live SDK Client instance which isn't JSON-serializable,
- * so we can't pass Source[] as an island prop from SSR; each context calls
- * this function directly. Browser calls require CORS to be enabled on each
- * upstream API.
+ * Two factories because the federal token must stay server-side:
+ *
+ *   - `createBrowserSources()` (Svelte islands): federal calls go through
+ *     `/api/proxy/federal/*`, our same-origin Astro endpoint that injects
+ *     `X-API-Key` server-side. The browser bundle never sees the token.
+ *   - `createServerSources()` (middleware, SSR pages): federal calls go
+ *     direct to the upstream API with `Auth.apiKey(FEDERAL_API_TOKEN)`.
+ *     `import.meta.env.FEDERAL_API_TOKEN` reads from `.env.local` for SSR
+ *     code without inlining into the client bundle (only `PUBLIC_*` is
+ *     inlined client-side).
+ *
+ * PA is the same in both contexts — open API with CORS, no secrets, baseUrl
+ * inlined via `PUBLIC_PA_API_URL`.
  */
-export function createSources(): Source[] {
-  const paUrl = import.meta.env.PUBLIC_PA_API_URL;
-  const fedUrl = import.meta.env.PUBLIC_FEDERAL_API_URL;
+
+function paClient(): Source | null {
+  const url = import.meta.env.PUBLIC_PA_API_URL;
+  if (!url) return null;
+  return {
+    id: 'pa',
+    label: 'Pennsylvania',
+    client: new Client({ baseUrl: url, auth: Auth.none() }),
+    schema: PaOpportunitySchema,
+    enabled: true,
+  };
+}
+
+export function createBrowserSources(): Source[] {
   const sources: Source[] = [];
+  const pa = paClient();
+  if (pa) sources.push(pa);
 
-  if (paUrl) {
-    sources.push({
-      id: 'pa',
-      label: 'Pennsylvania',
-      client: new Client({ baseUrl: paUrl, auth: Auth.none() }),
-      schema: PaOpportunitySchema,
-      enabled: true,
-    });
-  }
-
-  if (fedUrl) {
-    // api.simpler.grants.gov expects the token in `X-API-Key` (confirmed by
-    // probing their endpoint). `Auth.apiKey()` uses that header by default.
-    // If the token is missing, fall back to `none()` and let the 401 get
-    // silently swallowed by searchAll().
-    const fedToken = import.meta.env.PUBLIC_FEDERAL_API_TOKEN;
-    const fedAuth = fedToken ? Auth.apiKey(fedToken) : Auth.none();
+  // Federal is only added when running in the browser, where we have a real
+  // origin to build the proxy URL from. The SDK's `Client` constructor calls
+  // `new URL(baseUrl)` and throws on relative URLs — so passing
+  // `/api/proxy/federal` during SSR (window undefined) blows up the entire
+  // page render. Islands re-evaluate this function on hydration; at that
+  // point window exists and federal joins the source list.
+  const federalConfigured = import.meta.env.PUBLIC_FEDERAL_API_URL;
+  if (federalConfigured && typeof window !== 'undefined') {
     sources.push({
       id: 'federal',
       label: 'Federal (Grants.gov)',
-      client: new Client({ baseUrl: fedUrl, auth: fedAuth }),
+      client: new Client({
+        baseUrl: `${window.location.origin}/api/proxy/federal`,
+        auth: Auth.none(),
+      }),
       schema: grantsGovPlugin.schemas.Opportunity,
       enabled: true,
     });
   }
+  return sources;
+}
 
+export function createServerSources(): Source[] {
+  const sources: Source[] = [];
+  const pa = paClient();
+  if (pa) sources.push(pa);
+
+  // Read from `process.env` so the token is resolved at runtime, not baked
+  // into the build (which `import.meta.env` would do). Falls back to the
+  // public URL if no server-only override is set.
+  const federalUrl = process.env.FEDERAL_API_URL ?? import.meta.env.PUBLIC_FEDERAL_API_URL;
+  if (federalUrl) {
+    const token = process.env.FEDERAL_API_TOKEN;
+    sources.push({
+      id: 'federal',
+      label: 'Federal (Grants.gov)',
+      client: new Client({
+        baseUrl: federalUrl,
+        auth: token ? Auth.apiKey(token) : Auth.none(),
+      }),
+      schema: grantsGovPlugin.schemas.Opportunity,
+      enabled: true,
+    });
+  }
   return sources;
 }
 
 /**
  * Detail-page helper: routes to the source that owns this id.
  *
- * Primary path is the SDK's `.opportunities.get()` — it parses the envelope,
- * validates with the source's custom-field schema, and returns typed data.
- *
- * Fallback path catches `ZodError` (e.g. Federal's `attachments[].createdAt`
- * doesn't always satisfy strict ISO 8601). We refetch the raw body and render
- * the unvalidated payload so a single cosmetic schema miss doesn't blank the
- * whole page — the UI reads fields via `getByPath()` which tolerates gaps.
+ * Primary path uses the SDK's `.opportunities.get()` — typed + envelope-
+ * validated. Falls back to a raw fetch + raw payload on `ZodError` so
+ * cosmetic schema nits (e.g. federal's `attachments[].createdAt` uses
+ * `+00:00` offset which Zod's default strict `.datetime()` rejects) don't
+ * blank the whole detail page.
  */
 export async function getOpportunity(
   sources: Source[],
@@ -71,8 +107,6 @@ export async function getOpportunity(
     return await src.client.opportunities.get(id, { schema: src.schema });
   } catch (err) {
     if (!(err instanceof ZodError)) throw err;
-
-    // Schema validation miss — re-fetch raw and render what we got.
     const res = await src.client.fetch(`/common-grants/opportunities/${encodeURIComponent(id)}`);
     if (res.status === 404) return null;
     if (!res.ok) throw err;
@@ -95,6 +129,15 @@ export interface SourceDescriptor {
   label: string;
 }
 
+/**
+ * Build the descriptor list for SSR pages to pass into islands. Uses
+ * server-side env so this works without runtime bindings; descriptors only
+ * include `{id, label}`, no secrets or URLs.
+ */
 export function getSourceDescriptors(): SourceDescriptor[] {
-  return createSources().map((s) => ({ id: s.id, label: s.label }));
+  const out: SourceDescriptor[] = [];
+  if (import.meta.env.PUBLIC_PA_API_URL) out.push({ id: 'pa', label: 'Pennsylvania' });
+  const federalConfigured = process.env.FEDERAL_API_URL ?? import.meta.env.PUBLIC_FEDERAL_API_URL;
+  if (federalConfigured) out.push({ id: 'federal', label: 'Federal (Grants.gov)' });
+  return out;
 }

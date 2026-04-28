@@ -1,12 +1,12 @@
 <script lang="ts">
   import { bySource, clearCacheAndRefetch, loading } from '@/stores/resultsStore';
-  import { createSources } from '@/client';
+  import { createBrowserSources } from '@/client';
   import type { SourceId } from '@/client/federation/source';
   import { formatRelativeAge } from '@/lib/format';
 
   // Built client-side — a Source is not JSON-serializable so we can't take it
   // as a prop from an Astro SSR parent.
-  const sources = createSources();
+  const sources = createBrowserSources();
   const enabledSourceIds = sources.map((s) => s.id);
 
   function labelFor(id: SourceId): string {
