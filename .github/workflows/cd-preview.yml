@@ -39,6 +39,7 @@ jobs:
         env:
           PUBLIC_PA_API_URL: ${{ vars.PUBLIC_PA_API_URL }}
           PUBLIC_FEDERAL_API_URL: ${{ vars.PUBLIC_FEDERAL_API_URL }}
+          PUBLIC_CA_API_URL: ${{ vars.PUBLIC_CA_API_URL }}
         run: pnpm run build
 
       - name: Deploy preview Worker
