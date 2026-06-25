@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cacheKey, resultCache } from '@/client/federation/cache';
 
 function makeEntry(items: unknown[] = []) {
@@ -28,9 +28,17 @@ describe('cacheKey', () => {
 });
 
 describe('resultCache', () => {
+  // The cache is a module singleton; `clear()` empties its memory but not its
+  // onChange listeners. Track subscriptions and tear them down between tests so
+  // a listener (notably the throwing one) can't leak into later tests' notify().
+  const subs: Array<() => void> = [];
   beforeEach(() => {
     resultCache.clear();
     localStorage.clear();
+  });
+  afterEach(() => {
+    subs.forEach((unsub) => unsub());
+    subs.length = 0;
   });
 
   it('round-trips through in-memory store', () => {
@@ -74,7 +82,7 @@ describe('resultCache', () => {
 
   it('onChange does NOT fire for local set/clear (caller already knows)', () => {
     const fn = vi.fn();
-    resultCache.onChange(fn);
+    subs.push(resultCache.onChange(fn));
     resultCache.set('pa:k1', makeEntry([{ id: 'x' }]));
     resultCache.clear();
     expect(fn).not.toHaveBeenCalled();
@@ -100,8 +108,8 @@ describe('resultCache', () => {
     });
     const quiet = vi.fn();
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    resultCache.onChange(noisy);
-    resultCache.onChange(quiet);
+    subs.push(resultCache.onChange(noisy));
+    subs.push(resultCache.onChange(quiet));
     window.dispatchEvent(
       new StorageEvent('storage', {
         key: 'cg-cache:pa:k1',
@@ -114,7 +122,7 @@ describe('resultCache', () => {
 
   it('storage event from another tab hydrates the in-memory map and notifies', () => {
     const fn = vi.fn();
-    resultCache.onChange(fn);
+    subs.push(resultCache.onChange(fn));
 
     const entry = { items: [{ id: 'remote' }], total: 1, dataAsOf: null, cachedAt: Date.now() };
     window.dispatchEvent(
@@ -134,7 +142,7 @@ describe('resultCache', () => {
   it('storage event with null newValue (cleared elsewhere) drops the entry', () => {
     resultCache.set('pa:k1', makeEntry());
     const fn = vi.fn();
-    resultCache.onChange(fn);
+    subs.push(resultCache.onChange(fn));
 
     window.dispatchEvent(new StorageEvent('storage', { key: 'cg-cache:pa:k1', newValue: null }));
 
@@ -143,7 +151,7 @@ describe('resultCache', () => {
 
   it('storage event for an unrelated key is ignored', () => {
     const fn = vi.fn();
-    resultCache.onChange(fn);
+    subs.push(resultCache.onChange(fn));
     window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated', newValue: 'whatever' }));
     expect(fn).not.toHaveBeenCalled();
   });
