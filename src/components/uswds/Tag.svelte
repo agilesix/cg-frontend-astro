@@ -1,7 +1,14 @@
 <script lang="ts">
   interface Props {
     label: string;
-    variant?: 'default' | 'open' | 'forecasted' | 'closed' | 'source-pa' | 'source-federal';
+    variant?:
+      | 'default'
+      | 'open'
+      | 'forecasted'
+      | 'closed'
+      | 'source-pa'
+      | 'source-federal'
+      | 'source-california';
     onRemove?: () => void;
   }
 
@@ -53,6 +60,10 @@
   }
   .tag--source-federal {
     background-color: #2e8540;
+    color: #fff;
+  }
+  .tag--source-california {
+    background-color: #b50909;
     color: #fff;
   }
 </style>

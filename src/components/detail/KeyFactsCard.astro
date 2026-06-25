@@ -1,6 +1,6 @@
 ---
 import { getByPath, formatDate, formatCurrency } from '@/lib/format';
-import type { KeyFactsCardConfig } from '@/types/portal';
+import type { KeyFactConfig, KeyFactsCardConfig } from '@/types/portal';
 
 interface Props {
   card: KeyFactsCardConfig;
@@ -9,20 +9,32 @@ interface Props {
 
 const { card, opportunity } = Astro.props;
 
-function renderValue(path: string): string | null {
-  const raw = getByPath(opportunity, path);
+function inferFormat(path: string): NonNullable<KeyFactConfig['format']> {
+  if (path.includes('Amount')) return 'currency';
+  if (path.includes('Date')) return 'date';
+  return 'text';
+}
+
+function renderValue(fact: KeyFactConfig): string | null {
+  const raw = getByPath(opportunity, fact.fieldPath);
   if (raw == null) return null;
 
-  // Best-effort type inference by path suffix.
-  if (path.includes('Date')) return formatDate(raw);
-  if (path.includes('Amount')) return formatCurrency(raw);
-  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
-  if (typeof raw === 'number' || typeof raw === 'string') return String(raw);
-  return null;
+  switch (fact.format ?? inferFormat(fact.fieldPath)) {
+    case 'date':
+      return formatDate(raw);
+    case 'currency':
+      return formatCurrency(raw);
+    case 'boolean':
+      return raw ? 'Yes' : 'No';
+    default:
+      if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
+      if (typeof raw === 'number' || typeof raw === 'string') return String(raw);
+      return null;
+  }
 }
 
 const rows = card.facts
-  .map((f) => ({ term: f.term, value: renderValue(f.fieldPath), hint: f.hint }))
+  .map((f) => ({ term: f.term, value: renderValue(f), hint: f.hint }))
   .filter((r) => r.value != null);
 ---
 
@@ -39,8 +51,13 @@ const rows = card.facts
               <div class="fact-row">
                 <dt>{r.term}</dt>
                 <dd>
-                  {r.value}
-                  {r.hint && <span class="usa-hint"> — {r.hint}</span>}
+                  <span class="fact-value">
+                    {r.value}
+                    {r.hint && <span class="usa-hint"> — {r.hint}</span>}
+                  </span>
+                  <button type="button" class="fact-toggle" hidden>
+                    Show more
+                  </button>
                 </dd>
               </div>
             ))}
@@ -69,4 +86,53 @@ const rows = card.facts
   dd {
     margin: 0;
   }
+  /* Clamp long values to 2 lines; the toggle (revealed by the script only
+     when the text actually overflows) expands them. */
+  .fact-value {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  .fact-value.is-expanded {
+    display: block;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+  }
+  .fact-toggle {
+    background: none;
+    border: 0;
+    color: #005ea2;
+    cursor: pointer;
+    font-size: 0.875rem;
+    padding: 0.125rem 0;
+  }
+  .fact-toggle:hover {
+    text-decoration: underline;
+  }
 </style>
+
+<script>
+  // Reveal the "Show more" toggle only for values that are actually clamped
+  // (text taller than the 2-line box), then let it expand/collapse.
+  function initFactToggles() {
+    document.querySelectorAll<HTMLElement>('.fact-row').forEach((row) => {
+      const value = row.querySelector<HTMLElement>('.fact-value');
+      const toggle = row.querySelector<HTMLButtonElement>('.fact-toggle');
+      if (!value || !toggle || toggle.dataset.ready) return;
+      if (value.scrollHeight - value.clientHeight > 1) {
+        toggle.hidden = false;
+        toggle.dataset.ready = 'true';
+        toggle.addEventListener('click', () => {
+          const expanded = value.classList.toggle('is-expanded');
+          toggle.textContent = expanded ? 'Show less' : 'Show more';
+        });
+      }
+    });
+  }
+  initFactToggles();
+  // Re-run after view transitions / client navigations.
+  document.addEventListener('astro:page-load', initFactToggles);
+</script>

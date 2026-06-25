@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { filters, query } from '@/stores/searchStore';
+  import { filters, query, clearAllFilters } from '@/stores/searchStore';
   import { portalConfig } from '@/portal.config';
   import type { ActiveFilters, DateRangeValue, NumberRangeValue } from '@/client/types';
   import Tag from '@/components/uswds/Tag.svelte';
@@ -71,8 +71,7 @@
   }
 
   function clearAll() {
-    filters.set({});
-    query.set('');
+    clearAllFilters();
   }
 </script>
 

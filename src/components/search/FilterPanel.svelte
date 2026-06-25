@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { filters, clearAllFilters } from '@/stores/searchStore';
-  import { rawItems } from '@/stores/resultsStore';
+  import { filters, clearAllFilters, activeTab } from '@/stores/searchStore';
+  import { activeState } from '@/stores/resultsStore';
   import { portalConfig } from '@/portal.config';
   import type { ActiveFilters, DateRangeValue, NumberRangeValue } from '@/client/types';
   import type { FilterConfig } from '@/types/portal';
@@ -27,19 +27,6 @@
     updateFilter(id, arr);
   }
 
-  function deriveOptions(cfg: FilterConfig): readonly string[] {
-    if (cfg.options) return cfg.options;
-    if (cfg.optionsSource !== 'derive' || !cfg.fieldPath) return [];
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const seen = new Set<string>();
-    for (const item of $rawItems) {
-      if (cfg.sourceFilter && item._source !== cfg.sourceFilter) continue;
-      const val = getByPath(item, cfg.fieldPath);
-      if (typeof val === 'string' && val) seen.add(val);
-    }
-    return [...seen].sort();
-  }
-
   function getByPath(obj: unknown, path: string): unknown {
     let cur: unknown = obj;
     for (const seg of path.split('.')) {
@@ -47,6 +34,37 @@
       cur = (cur as Record<string, unknown>)[seg];
     }
     return cur;
+  }
+
+  /**
+   * Filters with a `perSource` map are only relevant to the active tab if
+   * that source has a mapping. Filters with no `perSource` (e.g. `status`)
+   * are universal — always shown.
+   */
+  function appliesToActive(cfg: FilterConfig): boolean {
+    if (!cfg.perSource) return true;
+    return cfg.perSource[$activeTab] !== undefined;
+  }
+
+  function fieldPathFor(cfg: FilterConfig): string | undefined {
+    return cfg.perSource?.[$activeTab]?.fieldPath;
+  }
+
+  function deriveOptions(cfg: FilterConfig): readonly string[] {
+    if (cfg.options) return cfg.options;
+    if (cfg.optionsSource !== 'derive') return [];
+    const path = fieldPathFor(cfg);
+    if (!path) return [];
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const seen = new Set<string>();
+    for (const item of $activeState.items) {
+      const val = getByPath(item, path);
+      if (typeof val === 'string' && val) seen.add(val);
+      else if (Array.isArray(val)) {
+        for (const v of val) if (typeof v === 'string' && v) seen.add(v);
+      }
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
   }
 
   function isActive(cfg: FilterConfig): boolean {
@@ -70,71 +88,77 @@
   </div>
 
   {#each portalConfig.filters as cfg (cfg.id)}
-    <Accordion
-      id="filter-{cfg.id}"
-      heading={cfg.label}
-      defaultOpen={cfg.defaultOpen ?? false}
-      hasActiveIndicator
-      isActive={isActive(cfg)}
-    >
-      {#if cfg.hint}
-        <p class="usa-hint">{cfg.hint}</p>
-      {/if}
-
-      {#if cfg.type === 'checkbox-group'}
-        {@const options = deriveOptions(cfg)}
-        {@const current = $filters[cfg.id]}
-        {@const selected = Array.isArray(current) ? current : []}
-        {#each options as opt (opt)}
-          <Checkbox
-            id="filter-{cfg.id}-{opt}"
-            label={opt}
-            checked={selected.includes(opt)}
-            onchange={(v) => toggleCheckbox(cfg.id, opt, v)}
-          />
-        {/each}
-        {#if options.length === 0}
-          <p class="usa-hint filter-empty">No options available yet.</p>
+    {#if appliesToActive(cfg)}
+      <Accordion
+        id="filter-{cfg.id}"
+        heading={cfg.label}
+        defaultOpen={cfg.defaultOpen ?? false}
+        hasActiveIndicator
+        isActive={isActive(cfg)}
+      >
+        {#if cfg.hint}
+          <p class="usa-hint">{cfg.hint}</p>
         {/if}
-      {:else if cfg.type === 'date-range'}
-        {@const dr = ($filters[cfg.id] as DateRangeValue | undefined) ?? {}}
-        <DateRangePicker
-          idPrefix="filter-{cfg.id}"
-          start={dr.start ?? ''}
-          end={dr.end ?? ''}
-          onStartChange={(v) => updateFilter(cfg.id, { ...dr, start: v || undefined })}
-          onEndChange={(v) => updateFilter(cfg.id, { ...dr, end: v || undefined })}
-        />
-      {:else if cfg.type === 'number-range'}
-        {@const nr = ($filters[cfg.id] as NumberRangeValue | undefined) ?? {}}
-        <div class="number-range">
-          <label class="usa-label" for="filter-{cfg.id}-min">Min</label>
-          <input
-            class="usa-input"
-            id="filter-{cfg.id}-min"
-            type="number"
-            value={nr.min ?? ''}
-            oninput={(e) => {
-              const raw = (e.currentTarget as HTMLInputElement).value;
-              const n = raw === '' ? undefined : Number(raw);
-              updateFilter(cfg.id, { ...nr, min: Number.isFinite(n) ? n : undefined });
-            }}
+
+        {#if cfg.type === 'checkbox-group'}
+          {@const options = deriveOptions(cfg)}
+          {@const current = $filters[cfg.id]}
+          {@const selected = Array.isArray(current) ? current : []}
+          {#each options as opt (opt)}
+            <Checkbox
+              id="filter-{cfg.id}-{opt}"
+              label={opt}
+              checked={selected.includes(opt)}
+              onchange={(v) => toggleCheckbox(cfg.id, opt, v)}
+            />
+          {/each}
+          {#if options.length === 0}
+            <p class="usa-hint filter-empty">No options available yet.</p>
+          {/if}
+        {:else if cfg.type === 'date-range'}
+          {@const dr = ($filters[cfg.id] as DateRangeValue | undefined) ?? {}}
+          <DateRangePicker
+            idPrefix="filter-{cfg.id}"
+            start={dr.start ?? ''}
+            end={dr.end ?? ''}
+            onStartChange={(v) => updateFilter(cfg.id, { ...dr, start: v || undefined })}
+            onEndChange={(v) => updateFilter(cfg.id, { ...dr, end: v || undefined })}
           />
-          <label class="usa-label" for="filter-{cfg.id}-max">Max</label>
-          <input
-            class="usa-input"
-            id="filter-{cfg.id}-max"
-            type="number"
-            value={nr.max ?? ''}
-            oninput={(e) => {
-              const raw = (e.currentTarget as HTMLInputElement).value;
-              const n = raw === '' ? undefined : Number(raw);
-              updateFilter(cfg.id, { ...nr, max: Number.isFinite(n) ? n : undefined });
-            }}
-          />
-        </div>
-      {/if}
-    </Accordion>
+        {:else if cfg.type === 'number-range'}
+          {@const nr = ($filters[cfg.id] as NumberRangeValue | undefined) ?? {}}
+          <div class="number-range">
+            <div class="number-range__field">
+              <label class="usa-label" for="filter-{cfg.id}-min">Min</label>
+              <input
+                class="usa-input"
+                id="filter-{cfg.id}-min"
+                type="number"
+                value={nr.min ?? ''}
+                oninput={(e) => {
+                  const raw = (e.currentTarget as HTMLInputElement).value;
+                  const n = raw === '' ? undefined : Number(raw);
+                  updateFilter(cfg.id, { ...nr, min: Number.isFinite(n) ? n : undefined });
+                }}
+              />
+            </div>
+            <div class="number-range__field">
+              <label class="usa-label" for="filter-{cfg.id}-max">Max</label>
+              <input
+                class="usa-input"
+                id="filter-{cfg.id}-max"
+                type="number"
+                value={nr.max ?? ''}
+                oninput={(e) => {
+                  const raw = (e.currentTarget as HTMLInputElement).value;
+                  const n = raw === '' ? undefined : Number(raw);
+                  updateFilter(cfg.id, { ...nr, max: Number.isFinite(n) ? n : undefined });
+                }}
+              />
+            </div>
+          </div>
+        {/if}
+      </Accordion>
+    {/if}
   {/each}
 </aside>
 
@@ -151,10 +175,18 @@
   .filter-empty {
     font-style: italic;
   }
+  /* Stacked: Min above Max so neither input gets squashed in the sidebar. */
   .number-range {
-    display: grid;
-    grid-template-columns: auto 1fr auto 1fr;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+  }
+  .number-range__field {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Tighten USWDS's default top margin on labels inside the stacked field. */
+  .number-range__field .usa-label {
+    margin-top: 0;
   }
 </style>

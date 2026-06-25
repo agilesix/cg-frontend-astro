@@ -1,20 +1,24 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { urlParams, hydrateStoresFromUrl } from '@/stores/searchStore';
-  import { fetchResults } from '@/stores/resultsStore';
-  import { createSources } from '@/client';
+  import { fetchTabs } from '@/stores/resultsStore';
+  import type { SourceId } from '@/client/federation/source';
 
-  // Sources are built client-side rather than passed in as a prop because a
-  // Source contains a live SDK Client (not JSON-serializable) — Astro would
-  // silently strip the prop on island hydration.
-  const sources = createSources();
+  // `sources` is the list of configured source IDs (from the server). We fetch
+  // ALL of them on every criteria change so every tab's count reflects the
+  // current query/filters — not just the active tab's. The browser still knows
+  // nothing about source URLs or tokens; it only posts to /api/sources/[id]/search.
+  interface Props {
+    sources: SourceId[];
+  }
+  let { sources }: Props = $props();
 
   onMount(() => {
     hydrateStoresFromUrl(window.location.search);
-    void fetchResults(sources);
+    void fetchTabs(sources);
 
-    // Keep the URL in sync with state; replaceState (not pushState) so we
-    // don't inflate history with every filter toggle.
+    // Keep the URL synced. replaceState (not pushState) so we don't inflate
+    // browser history with every filter toggle.
     const unsubUrl = urlParams.subscribe((serialized) => {
       const next = serialized
         ? `${window.location.pathname}?${serialized}`
@@ -24,14 +28,15 @@
       }
     });
 
-    // Refetch on any cache-key-affecting change. Cache layer dedupes where possible.
-    const unsubRefetch = urlParams.subscribe(() => {
-      void fetchResults(sources);
+    // Refetch every source on any URL-relevant state change (tab, query,
+    // filters, sort). The cache dedupes, so unchanged sources are instant.
+    const unsubRefetchOnStateChange = urlParams.subscribe(() => {
+      void fetchTabs(sources);
     });
 
     return () => {
       unsubUrl();
-      unsubRefetch();
+      unsubRefetchOnStateChange();
     };
   });
 </script>

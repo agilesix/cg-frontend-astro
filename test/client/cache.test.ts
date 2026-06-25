@@ -1,104 +1,158 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cacheKey, resultCache } from '@/client/federation/cache';
+
+function makeEntry(items: unknown[] = []) {
+  return { items, total: items.length, dataAsOf: null };
+}
 
 describe('cacheKey', () => {
   it('is stable across object key reordering', () => {
-    const a = cacheKey({
-      search: 'foo',
-      enabledSources: ['pa', 'federal'],
-      serverFilters: { status: { operator: 'in', value: ['open'] } },
-      sortBy: 'keyDates.closeDate',
-      sortOrder: 'asc',
-    });
-    const b = cacheKey({
-      serverFilters: { status: { operator: 'in', value: ['open'] } },
-      enabledSources: ['federal', 'pa'],
-      sortOrder: 'asc',
-      sortBy: 'keyDates.closeDate',
-      search: 'foo',
-    });
+    const a = cacheKey('pa', { query: 'foo', filters: { status: ['open'] } });
+    const b = cacheKey('pa', { filters: { status: ['open'] }, query: 'foo' });
     expect(a).toBe(b);
   });
 
-  it('differs when server filters differ', () => {
-    const a = cacheKey({
-      search: '',
-      enabledSources: ['pa'],
-      serverFilters: { status: { operator: 'in', value: ['open'] } },
-      sortBy: 'x',
-      sortOrder: 'asc',
-    });
-    const b = cacheKey({
-      search: '',
-      enabledSources: ['pa'],
-      serverFilters: { status: { operator: 'in', value: ['closed'] } },
-      sortBy: 'x',
-      sortOrder: 'asc',
-    });
+  it('produces independent keys per source', () => {
+    const a = cacheKey('pa', { query: 'foo' });
+    const b = cacheKey('federal', { query: 'foo' });
+    expect(a).not.toBe(b);
+    expect(a.startsWith('pa:')).toBe(true);
+    expect(b.startsWith('federal:')).toBe(true);
+  });
+
+  it('differs when filters differ', () => {
+    const a = cacheKey('pa', { filters: { status: ['open'] } });
+    const b = cacheKey('pa', { filters: { status: ['closed'] } });
     expect(a).not.toBe(b);
   });
 });
 
 describe('resultCache', () => {
+  // The cache is a module singleton; `clear()` empties its memory but not its
+  // onChange listeners. Track subscriptions and tear them down between tests so
+  // a listener (notably the throwing one) can't leak into later tests' notify().
+  const subs: Array<() => void> = [];
   beforeEach(() => {
     resultCache.clear();
-    sessionStorage.clear();
+    localStorage.clear();
+  });
+  afterEach(() => {
+    subs.forEach((unsub) => unsub());
+    subs.length = 0;
   });
 
   it('round-trips through in-memory store', () => {
-    resultCache.set('k1', {
-      items: [{ _source: 'pa' }],
-      bySource: { pa: { total: 1, dataAsOf: null }, federal: { total: 0, dataAsOf: null } },
-    });
-    const hit = resultCache.get('k1');
+    resultCache.set('pa:k1', makeEntry([{ id: 'x' }]));
+    const hit = resultCache.get('pa:k1');
     expect(hit?.items).toHaveLength(1);
-    expect(hit?.bySource.pa.total).toBe(1);
+    expect(hit?.total).toBe(1);
   });
 
   it('returns null for unknown keys', () => {
     expect(resultCache.get('missing')).toBeNull();
   });
 
-  it('expires entries past TTL', () => {
+  it('expires entries past TTL (30 min)', () => {
     vi.useFakeTimers();
-    resultCache.set('k1', {
-      items: [],
-      bySource: { pa: { total: 0, dataAsOf: null }, federal: { total: 0, dataAsOf: null } },
-    });
-    vi.advanceTimersByTime(5 * 60_000 + 1);
-    expect(resultCache.get('k1')).toBeNull();
+    resultCache.set('pa:k1', makeEntry());
+    vi.advanceTimersByTime(30 * 60_000 + 1);
+    expect(resultCache.get('pa:k1')).toBeNull();
     vi.useRealTimers();
   });
 
-  it('persists to sessionStorage and hydrates', () => {
-    resultCache.set('k1', {
-      items: [{ _source: 'federal' }],
-      bySource: { pa: { total: 0, dataAsOf: null }, federal: { total: 1, dataAsOf: '2026-04-18' } },
-    });
-    // Simulate fresh load — new cache instance would be created normally; here
-    // we just verify the storage side effect happened.
-    expect(sessionStorage.getItem('cg-cache:k1')).not.toBeNull();
+  it('persists to localStorage', () => {
+    resultCache.set('pa:k1', makeEntry([{ id: 'x' }]));
+    expect(localStorage.getItem('cg-cache:pa:k1')).not.toBeNull();
   });
 
-  it('clear() removes both in-memory and storage entries', () => {
-    resultCache.set('k1', {
-      items: [],
-      bySource: { pa: { total: 0, dataAsOf: null }, federal: { total: 0, dataAsOf: null } },
-    });
+  it('clear() wipes both in-memory and localStorage entries', () => {
+    resultCache.set('pa:k1', makeEntry());
+    resultCache.set('federal:k2', makeEntry());
     resultCache.clear();
-    expect(resultCache.get('k1')).toBeNull();
-    expect(sessionStorage.getItem('cg-cache:k1')).toBeNull();
+    expect(resultCache.get('pa:k1')).toBeNull();
+    expect(localStorage.getItem('cg-cache:pa:k1')).toBeNull();
+    expect(localStorage.getItem('cg-cache:federal:k2')).toBeNull();
   });
 
-  it('evicts least-recently-used when over cap', () => {
-    // 20 is the cap. Set 21 entries; earliest should be gone.
-    for (let i = 0; i < 21; i++) {
-      resultCache.set(`k${i}`, {
-        items: [],
-        bySource: { pa: { total: 0, dataAsOf: null }, federal: { total: 0, dataAsOf: null } },
-      });
-    }
-    expect(resultCache.get('k0')).toBeNull();
-    expect(resultCache.get('k20')).not.toBeNull();
+  it('evicts least-recently-used when over the cap', () => {
+    for (let i = 0; i < 21; i++) resultCache.set(`pa:k${i}`, makeEntry());
+    expect(resultCache.get('pa:k0')).toBeNull();
+    expect(resultCache.get('pa:k20')).not.toBeNull();
+  });
+
+  it('onChange does NOT fire for local set/clear (caller already knows)', () => {
+    const fn = vi.fn();
+    subs.push(resultCache.onChange(fn));
+    resultCache.set('pa:k1', makeEntry([{ id: 'x' }]));
+    resultCache.clear();
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('onChange unsubscribe stops invocations', () => {
+    const fn = vi.fn();
+    const unsub = resultCache.onChange(fn);
+    unsub();
+    // Storage events would otherwise notify; unsubscribed listener stays silent.
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'cg-cache:pa:k1',
+        newValue: JSON.stringify({ ...makeEntry(), cachedAt: Date.now() }),
+      }),
+    );
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('onChange listener throwing does not break others', () => {
+    const noisy = vi.fn(() => {
+      throw new Error('boom');
+    });
+    const quiet = vi.fn();
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    subs.push(resultCache.onChange(noisy));
+    subs.push(resultCache.onChange(quiet));
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'cg-cache:pa:k1',
+        newValue: JSON.stringify({ ...makeEntry(), cachedAt: Date.now() }),
+      }),
+    );
+    expect(quiet).toHaveBeenCalledOnce();
+    errSpy.mockRestore();
+  });
+
+  it('storage event from another tab hydrates the in-memory map and notifies', () => {
+    const fn = vi.fn();
+    subs.push(resultCache.onChange(fn));
+
+    const entry = { items: [{ id: 'remote' }], total: 1, dataAsOf: null, cachedAt: Date.now() };
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: 'cg-cache:pa:remote',
+        newValue: JSON.stringify(entry),
+      }),
+    );
+
+    expect(fn).toHaveBeenCalledWith(
+      'pa:remote',
+      expect.objectContaining({ items: [{ id: 'remote' }] }),
+    );
+    expect(resultCache.get('pa:remote')?.items).toEqual([{ id: 'remote' }]);
+  });
+
+  it('storage event with null newValue (cleared elsewhere) drops the entry', () => {
+    resultCache.set('pa:k1', makeEntry());
+    const fn = vi.fn();
+    subs.push(resultCache.onChange(fn));
+
+    window.dispatchEvent(new StorageEvent('storage', { key: 'cg-cache:pa:k1', newValue: null }));
+
+    expect(fn).toHaveBeenCalledWith('pa:k1', null);
+  });
+
+  it('storage event for an unrelated key is ignored', () => {
+    const fn = vi.fn();
+    subs.push(resultCache.onChange(fn));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated', newValue: 'whatever' }));
+    expect(fn).not.toHaveBeenCalled();
   });
 });

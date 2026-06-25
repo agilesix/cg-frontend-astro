@@ -1,17 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { sortMerged, paginate, totalPages } from '@/client/federation/pipeline';
-import type { Tagged } from '@/client/federation/source';
 
 interface Item {
   id: string;
   keyDates: { closeDate?: string | null };
 }
 
-const items: Array<Tagged<Item>> = [
-  { _source: 'pa', id: 'a', keyDates: { closeDate: '2026-06-01' } },
-  { _source: 'federal', id: 'b', keyDates: { closeDate: '2026-03-15' } },
-  { _source: 'pa', id: 'c', keyDates: { closeDate: null } },
-  { _source: 'federal', id: 'd', keyDates: { closeDate: '2026-12-01' } },
+const items: Item[] = [
+  { id: 'a', keyDates: { closeDate: '2026-06-01' } },
+  { id: 'b', keyDates: { closeDate: '2026-03-15' } },
+  { id: 'c', keyDates: { closeDate: null } },
+  { id: 'd', keyDates: { closeDate: '2026-12-01' } },
 ];
 
 describe('sortMerged', () => {

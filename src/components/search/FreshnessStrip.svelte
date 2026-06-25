@@ -1,38 +1,39 @@
 <script lang="ts">
-  import { bySource, clearCacheAndRefetch, loading } from '@/stores/resultsStore';
-  import { createSources } from '@/client';
+  import { activeTab } from '@/stores/searchStore';
+  import { activeState, clearCacheAndRefetch, loading } from '@/stores/resultsStore';
   import type { SourceId } from '@/client/federation/source';
   import { formatRelativeAge } from '@/lib/format';
 
-  // Built client-side — a Source is not JSON-serializable so we can't take it
-  // as a prop from an Astro SSR parent.
-  const sources = createSources();
-  const enabledSourceIds = sources.map((s) => s.id);
+  interface Props {
+    available: Array<{ id: SourceId; label: string }>;
+  }
+  let { available }: Props = $props();
 
-  function labelFor(id: SourceId): string {
-    return id === 'pa' ? 'PA' : 'Federal';
+  // Looks up the active tab's label for the freshness line. Falls back to
+  // the source ID if the descriptor list doesn't include it (shouldn't
+  // happen — the search page only renders this when the active tab is
+  // configured).
+  function activeLabel(id: SourceId): string {
+    return available.find((s) => s.id === id)?.label ?? id;
   }
 </script>
 
 <div class="freshness-strip" aria-live="polite">
-  {#each enabledSourceIds as id (id)}
-    {@const info = $bySource[id]}
-    <span class="freshness-item">
-      {labelFor(id)}:
-      {#if info.error}
-        <span class="err">unavailable</span>
-      {:else if info.dataAsOf}
-        {formatRelativeAge(info.dataAsOf)}
-      {:else}
-        —
-      {/if}
-    </span>
-  {/each}
+  <span class="freshness-item">
+    {activeLabel($activeTab)}:
+    {#if $activeState.error}
+      <span class="err">unavailable</span>
+    {:else if $activeState.dataAsOf}
+      {formatRelativeAge($activeState.dataAsOf)}
+    {:else}
+      —
+    {/if}
+  </span>
   <button
     type="button"
     class="usa-button usa-button--unstyled refresh-btn"
     disabled={$loading}
-    onclick={() => clearCacheAndRefetch(sources)}
+    onclick={() => clearCacheAndRefetch()}
     aria-label="Refresh"
   >
     ↻ Refresh

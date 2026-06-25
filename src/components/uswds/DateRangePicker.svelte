@@ -44,9 +44,10 @@
 </div>
 
 <style>
+  /* Stacked: two date inputs side-by-side get cramped in the sidebar. */
   .date-range {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
   }
 </style>

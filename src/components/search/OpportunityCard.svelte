@@ -1,19 +1,19 @@
 <script lang="ts">
-  import type { Tagged } from '@/client/federation/source';
+  import type { SourceId } from '@/client/federation/source';
+  import { SOURCE_LABELS } from '@/client/federation/source';
   import Tag from '@/components/uswds/Tag.svelte';
   import { formatDate, formatFundingRange, getByPath } from '@/lib/format';
 
   interface Props {
-    opportunity: Tagged<unknown>;
+    opportunity: unknown;
+    /** Source the opportunity came from. Drives the badge + detail URL. */
+    source: SourceId;
   }
 
-  let { opportunity }: Props = $props();
+  let { opportunity, source }: Props = $props();
 
-  const source = $derived(opportunity._source);
-  const sourceLabel = $derived(source === 'pa' ? 'Pennsylvania' : 'Federal');
-  const sourceVariant = $derived<'source-pa' | 'source-federal'>(
-    source === 'pa' ? 'source-pa' : 'source-federal',
-  );
+  const sourceLabel = $derived(SOURCE_LABELS[source]);
+  const sourceVariant = $derived<`source-${SourceId}`>(`source-${source}`);
 
   const id = $derived(String(getByPath(opportunity, 'id') ?? ''));
   const title = $derived(String(getByPath(opportunity, 'title') ?? 'Untitled opportunity'));
@@ -27,8 +27,8 @@
   const closeDate = $derived(formatDate(getByPath(opportunity, 'keyDates.closeDate')));
   const funding = $derived(
     formatFundingRange(
-      getByPath(opportunity, 'fundingDetails.minAwardAmount.amount'),
-      getByPath(opportunity, 'fundingDetails.maxAwardAmount.amount'),
+      getByPath(opportunity, 'funding.minAwardAmount.amount'),
+      getByPath(opportunity, 'funding.maxAwardAmount.amount'),
     ),
   );
   const href = $derived(`/opportunities/${source}/${encodeURIComponent(id)}`);

@@ -1,16 +1,21 @@
 import type { SourceId } from '@/client/federation/source';
 
-export type FilterMode = 'server' | 'client';
-
 export type FilterType = 'checkbox-group' | 'date-range' | 'number-range' | 'select';
+
+export interface PerSourceFilterMapping {
+  /**
+   * Dot-notation path into the parsed Opportunity, e.g.
+   * `'keyDates.closeDate'` or `'customFields.agency.value.name'`. Read by
+   * the server when applying this filter for items from this source.
+   */
+  fieldPath: string;
+}
 
 export interface FilterConfig {
   /** Stable identifier. Must be unique across the portal config. */
   id: string;
   /** User-facing label rendered above the control. */
   label: string;
-  /** Whether the filter is applied by the API (`server`) or after merge (`client`). */
-  mode: FilterMode;
   /** Rendered control type. */
   type: FilterType;
   /** Short helper text shown beneath the control. */
@@ -21,26 +26,29 @@ export interface FilterConfig {
   options?: readonly string[];
   /**
    * How to enumerate options for checkbox-group / select when not static.
-   * `'derive'` reads unique values from the current $rawItems.
+   * `'derive'` reads unique values from the active tab's items.
    */
   optionsSource?: 'derive';
   /**
-   * Only applies to client-side filters. When set, the filter predicate is
-   * only evaluated against items from this source. Items from other sources
-   * are not excluded.
+   * Per-source mappings. The active tab tells the server which source's
+   * mapping to read. If a source isn't listed AND the filter has any
+   * `perSource` entries, the filter is hidden when that tab is active.
+   * Filters with NO `perSource` (e.g. `status`) apply universally.
    */
-  sourceFilter?: SourceId;
-  /**
-   * Only applies to client-side filters. Dot-notation path into the parsed
-   * Opportunity, e.g. `'keyDates.closeDate'` or `'customFields.agency.value.name'`.
-   */
-  fieldPath?: string;
+  perSource?: Partial<Record<SourceId, PerSourceFilterMapping>>;
 }
 
 export interface KeyFactConfig {
   term: string;
   fieldPath: string;
   hint?: string;
+  /**
+   * How to render the value. When omitted, the renderer infers from the path
+   * (`*Amount*` → currency, `*Date*` → date, else text). Set explicitly for
+   * fields the heuristic would misread — e.g. free-form CA strings that
+   * happen to contain "Date", or booleans.
+   */
+  format?: 'date' | 'currency' | 'boolean' | 'text';
 }
 
 export interface KeyFactsCardConfig {

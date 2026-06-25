@@ -1,5 +1,8 @@
-import type { Tagged } from './source';
 import type { SortOrder } from '@/client/types';
+import { dateToTimestamp } from '@/lib/format';
+
+// In-memory sort + paginate. Filter has moved server-side; this file is
+// just the small client-side pipeline that runs over the cached response.
 
 function getByPath(obj: unknown, path: string): unknown {
   let cur: unknown = obj;
@@ -10,12 +13,23 @@ function getByPath(obj: unknown, path: string): unknown {
   return cur;
 }
 
+/**
+ * Normalize values that don't sort meaningfully as-is. Date fields arrive as
+ * `Date` instances or CommonGrants date events (e.g. the default `keyDates.
+ * closeDate` sort) — collapse those to a comparable timestamp.
+ */
+function normalizeSortValue(v: unknown): unknown {
+  if (v instanceof Date) return v.getTime();
+  if (v != null && typeof v === 'object' && 'eventType' in (v as object)) {
+    return dateToTimestamp(v);
+  }
+  return v;
+}
+
 function compareValues(a: unknown, b: unknown): number {
-  // Nulls always last, independent of sort order.
   if (a == null && b == null) return 0;
   if (a == null) return 1;
   if (b == null) return -1;
-
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   if (typeof a === 'string' && typeof b === 'string') {
     const ta = Date.parse(a);
@@ -27,19 +41,14 @@ function compareValues(a: unknown, b: unknown): number {
 }
 
 /**
- * Stable, path-aware sort. `sortBy` is a dot-notation path. Nulls/undefined are
- * always emitted last regardless of order direction.
+ * Stable, path-aware sort. `sortBy` is a dot-notation path. Nulls/undefined
+ * are always emitted last regardless of sort order.
  */
-export function sortMerged<T>(
-  items: Array<Tagged<T>>,
-  sortBy: string,
-  sortOrder: SortOrder,
-): Array<Tagged<T>> {
+export function sortMerged<T>(items: T[], sortBy: string, sortOrder: SortOrder): T[] {
   const mult = sortOrder === 'asc' ? 1 : -1;
   return [...items].sort((a, b) => {
-    const va = getByPath(a, sortBy);
-    const vb = getByPath(b, sortBy);
-    // Nulls-last: force the null side to always compare higher regardless of mult.
+    const va = normalizeSortValue(getByPath(a, sortBy));
+    const vb = normalizeSortValue(getByPath(b, sortBy));
     if (va == null && vb == null) return 0;
     if (va == null) return 1;
     if (vb == null) return -1;

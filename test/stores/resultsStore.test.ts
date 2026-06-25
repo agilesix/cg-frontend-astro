@@ -1,51 +1,41 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { z } from 'zod';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  rawItems,
-  filteredSorted,
+  sourceState,
   total,
   totalPagesCount,
   visibleItems,
-  fetchResults,
+  fetchActiveTab,
+  cacheHit,
 } from '@/stores/resultsStore';
 import {
   query,
   filters,
-  enabledSources,
-  page,
+  activeTab,
+  pagesByTab,
   pageSize,
   sortBy,
   sortOrder,
 } from '@/stores/searchStore';
 import { resultCache } from '@/client/federation/cache';
-import type { Source, Tagged } from '@/client/federation/source';
+
+const ORIGINAL_FETCH = globalThis.fetch;
 
 function reset(): void {
   query.set('');
   filters.set({});
-  enabledSources.set(['pa', 'federal']);
+  activeTab.set('pa');
   sortBy.set('keyDates.closeDate');
   sortOrder.set('asc');
-  page.set(1);
+  pagesByTab.set({ pa: 1, federal: 1, california: 1 });
   pageSize.set(25);
-  rawItems.set([]);
+  sourceState.set({
+    pa: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
+    federal: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
+    california: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
+  });
+  cacheHit.set(false);
   resultCache.clear();
-  sessionStorage.clear();
-}
-
-const trivialSchema = z.object({
-  id: z.string(),
-  keyDates: z.object({ closeDate: z.string() }),
-});
-
-function makeSource(id: 'pa' | 'federal', post: ReturnType<typeof vi.fn>): Source {
-  return {
-    id,
-    label: id,
-    enabled: true,
-    schema: trivialSchema,
-    client: { post } as unknown as Source['client'],
-  };
+  localStorage.clear();
 }
 
 function jsonResponse(body: unknown): Response {
@@ -55,94 +45,104 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-describe('pipeline store computations', () => {
-  beforeEach(reset);
+beforeEach(reset);
+afterEach(() => {
+  globalThis.fetch = ORIGINAL_FETCH;
+});
 
-  const items: Array<Tagged<{ id: string; keyDates: { closeDate: string } }>> = [
-    { _source: 'pa', id: 'a', keyDates: { closeDate: '2026-06-01' } },
-    { _source: 'federal', id: 'b', keyDates: { closeDate: '2026-03-15' } },
-    { _source: 'pa', id: 'c', keyDates: { closeDate: '2026-12-01' } },
+describe('pipeline computeds', () => {
+  const items = [
+    { id: 'a', keyDates: { closeDate: '2026-06-01' } },
+    { id: 'b', keyDates: { closeDate: '2026-03-15' } },
+    { id: 'c', keyDates: { closeDate: '2026-12-01' } },
   ];
 
-  it('filteredSorted returns items in sort order', () => {
-    rawItems.set(items);
-    sortBy.set('keyDates.closeDate');
-    sortOrder.set('asc');
-    expect(filteredSorted.get().map((i) => (i as unknown as { id: string }).id)).toEqual([
-      'b',
-      'a',
-      'c',
-    ]);
+  function setActiveItems(it: unknown[]): void {
+    sourceState.set({
+      ...sourceState.get(),
+      pa: { items: it, total: it.length, dataAsOf: null, loading: false, error: null },
+    });
+  }
+
+  it('total reflects the active tab', () => {
+    setActiveItems(items);
+    expect(total.get()).toBe(3);
   });
 
-  it('total and totalPagesCount reflect the post-filter list', () => {
-    rawItems.set(items);
+  it('totalPagesCount uses pageSize', () => {
+    setActiveItems(items);
     pageSize.set(2);
-    expect(total.get()).toBe(3);
     expect(totalPagesCount.get()).toBe(2);
   });
 
-  it('visibleItems paginates correctly', () => {
-    rawItems.set(items);
+  it('visibleItems paginates per active tab', () => {
+    setActiveItems(items);
     pageSize.set(2);
-    page.set(1);
-    expect(visibleItems.get().map((i) => (i as unknown as { id: string }).id)).toEqual(['b', 'a']);
-    page.set(2);
-    expect(visibleItems.get().map((i) => (i as unknown as { id: string }).id)).toEqual(['c']);
+    pagesByTab.set({ pa: 1, federal: 1, california: 1 });
+    expect((visibleItems.get() as Array<{ id: string }>).map((i) => i.id)).toEqual(['b', 'a']);
+    pagesByTab.set({ pa: 2, federal: 1, california: 1 });
+    expect((visibleItems.get() as Array<{ id: string }>).map((i) => i.id)).toEqual(['c']);
   });
 });
 
-describe('fetchResults', () => {
-  beforeEach(reset);
-
-  it('calls searchAll on cache miss and populates atoms', async () => {
-    const paPost = vi.fn().mockResolvedValue(
-      jsonResponse({
-        items: [{ id: 'x', keyDates: { closeDate: '2026-06-01' } }],
-        paginationInfo: { totalItems: 1 },
-      }),
+describe('fetchActiveTab', () => {
+  it('hits /api/sources/[active]/search and writes the active tab', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ items: [{ id: 'x' }], total: 1, dataAsOf: null }),
     );
-    await fetchResults([makeSource('pa', paPost)]);
-    expect(paPost).toHaveBeenCalledTimes(1);
-    expect(rawItems.get()).toHaveLength(1);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    activeTab.set('pa');
+    await fetchActiveTab();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe('/api/sources/pa/search');
+    expect(sourceState.get().pa.items).toEqual([{ id: 'x' }]);
+    expect(cacheHit.get()).toBe(false);
   });
 
-  it('hits cache on second identical call without invoking searchAll', async () => {
-    const paPost = vi.fn().mockResolvedValue(
-      jsonResponse({
-        items: [{ id: 'x', keyDates: { closeDate: '2026-06-01' } }],
-        paginationInfo: { totalItems: 1 },
-      }),
+  it('hits cache on a second identical call (one network call total)', async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ items: [{ id: 'x' }], total: 1, dataAsOf: null }),
     );
-    const src = makeSource('pa', paPost);
-    enabledSources.set(['pa']);
-    await fetchResults([src]);
-    expect(paPost).toHaveBeenCalledTimes(1);
-    await fetchResults([src]);
-    expect(paPost).toHaveBeenCalledTimes(1);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await fetchActiveTab();
+    await fetchActiveTab();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(cacheHit.get()).toBe(true);
   });
 
-  it('refetches when server-side filter changes', async () => {
-    const paPost = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ items: [], paginationInfo: { totalItems: 0 } }));
-    const src = makeSource('pa', paPost);
-    enabledSources.set(['pa']);
-    await fetchResults([src]);
-    filters.set({ status: ['open'] });
-    await fetchResults([src]);
-    expect(paPost).toHaveBeenCalledTimes(2);
+  it('refetches when active tab switches to a different cache key', async () => {
+    const fetchMock = vi.fn(async (url) => {
+      const sourceId = String(url).match(/sources\/([a-z]+)/)?.[1];
+      return jsonResponse({
+        items: [{ id: sourceId }],
+        total: 1,
+        dataAsOf: null,
+      });
+    });
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    activeTab.set('pa');
+    await fetchActiveTab();
+    activeTab.set('federal');
+    await fetchActiveTab();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(sourceState.get().pa.items).toEqual([{ id: 'pa' }]);
+    expect(sourceState.get().federal.items).toEqual([{ id: 'federal' }]);
   });
 
-  it('does NOT refetch when only a client-side filter changes (cache key stable)', async () => {
-    const paPost = vi
-      .fn()
-      .mockResolvedValue(jsonResponse({ items: [], paginationInfo: { totalItems: 0 } }));
-    const src = makeSource('pa', paPost);
-    enabledSources.set(['pa']);
-    await fetchResults([src]);
-    filters.set({ paCategory: ['Agriculture'] });
-    await fetchResults([src]);
-    expect(paPost).toHaveBeenCalledTimes(1);
+  it('records error on failure', async () => {
+    const fetchMock = vi.fn(async () => new Response('boom', { status: 502 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await fetchActiveTab();
+
+    expect(sourceState.get().pa.error).toMatch(/502/);
+    expect(sourceState.get().pa.loading).toBe(false);
   });
 });
