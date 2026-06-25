@@ -48,11 +48,13 @@ describe('searchSource', () => {
       pageSize: 50,
     });
 
+    // No `page` → SDK auto-paginates up to `maxItems` so local filters see
+    // the full result set, not just the first page.
     expect(search).toHaveBeenCalledWith({
       query: 'agriculture',
       statuses: ['open'],
-      page: 1,
       pageSize: 50,
+      maxItems: 1000,
     });
     expect(result.items).toEqual([{ id: 'x' }]);
     expect(result.total).toBe(1);

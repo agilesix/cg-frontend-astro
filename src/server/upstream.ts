@@ -89,6 +89,13 @@ export interface SourceSearchResult {
   dataAsOf: string | null;
 }
 
+// Upper bound on items pulled from a source before in-memory filtering runs.
+// Date/funding filters are applied locally (SDK 0.4.0 can't push them down),
+// so the SDK must auto-paginate enough of the result set for those filters to
+// be meaningful — not just the first page. Bump if a source legitimately
+// returns more open opportunities than this.
+const MAX_FETCH = 1000;
+
 /**
  * Single-source search. Pushes the supported filters into the SDK call,
  * applies the rest in memory.
@@ -100,11 +107,13 @@ export async function searchSource(
   const pushdown = pickPushdownFilters(req.filters);
   const local = pickLocalFilters(req.filters, source.id);
 
+  // No explicit `page` → the SDK auto-paginates up to `maxItems`, so local
+  // filters see the full result set rather than just the first page.
   const result = await source.client.opportunities.search({
     query: req.query || undefined,
     statuses: pushdown.statuses,
-    page: 1,
     pageSize: req.pageSize ?? 100,
+    maxItems: MAX_FETCH,
   });
 
   const filtered = applyLocalFilters(result.items, local);

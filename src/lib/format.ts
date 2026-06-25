@@ -1,9 +1,38 @@
 /** Small helpers for rendering Opportunity fields consistently. */
 
+/**
+ * Coerce a date-like value into epoch milliseconds. Handles ISO strings,
+ * `Date` instances (the SDK parses dates into `Date`), and CommonGrants date
+ * events — a discriminated union on `eventType`:
+ *   - `singleDate`  → `date`
+ *   - `dateRange`   → `endDate` (the effective deadline) falling back to `startDate`
+ *   - `other`       → no comparable date
+ * Returns null when no usable date is present.
+ */
+export function dateToTimestamp(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (raw instanceof Date) {
+    const t = raw.getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+  if (typeof raw === 'string') {
+    const t = Date.parse(raw);
+    return Number.isFinite(t) ? t : null;
+  }
+  if (typeof raw === 'object') {
+    const ev = raw as Record<string, unknown>;
+    const candidate =
+      ev.eventType === 'dateRange'
+        ? (ev.endDate ?? ev.startDate)
+        : (ev.date ?? ev.startDate ?? ev.endDate);
+    if (candidate != null && candidate !== raw) return dateToTimestamp(candidate);
+  }
+  return null;
+}
+
 export function formatDate(raw: unknown): string | null {
-  if (typeof raw !== 'string' || !raw) return null;
-  const t = Date.parse(raw);
-  if (!Number.isFinite(t)) return null;
+  const t = dateToTimestamp(raw);
+  if (t == null) return null;
   return new Date(t).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',

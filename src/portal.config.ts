@@ -29,6 +29,7 @@ export const portalConfig: PortalConfig = {
       perSource: {
         pa: { fieldPath: 'keyDates.closeDate' },
         federal: { fieldPath: 'keyDates.closeDate' },
+        california: { fieldPath: 'keyDates.closeDate' },
       },
     },
     {
@@ -37,8 +38,9 @@ export const portalConfig: PortalConfig = {
       type: 'number-range',
       hint: 'Enter amounts in whole dollars',
       perSource: {
-        pa: { fieldPath: 'fundingDetails.maxAwardAmount.amount' },
-        federal: { fieldPath: 'fundingDetails.maxAwardAmount.amount' },
+        pa: { fieldPath: 'funding.maxAwardAmount.amount' },
+        federal: { fieldPath: 'funding.maxAwardAmount.amount' },
+        california: { fieldPath: 'funding.maxAwardAmount.amount' },
       },
     },
     {
@@ -49,6 +51,7 @@ export const portalConfig: PortalConfig = {
       perSource: {
         pa: { fieldPath: 'customFields.paCategory.value' },
         federal: { fieldPath: 'customFields.federalFundingSource.value' },
+        california: { fieldPath: 'customFields.caCategories.value' },
       },
     },
     {

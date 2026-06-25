@@ -1,4 +1,5 @@
 import type { SortOrder } from '@/client/types';
+import { dateToTimestamp } from '@/lib/format';
 
 // In-memory sort + paginate. Filter has moved server-side; this file is
 // just the small client-side pipeline that runs over the cached response.
@@ -10,6 +11,19 @@ function getByPath(obj: unknown, path: string): unknown {
     cur = (cur as Record<string, unknown>)[seg];
   }
   return cur;
+}
+
+/**
+ * Normalize values that don't sort meaningfully as-is. Date fields arrive as
+ * `Date` instances or CommonGrants date events (e.g. the default `keyDates.
+ * closeDate` sort) — collapse those to a comparable timestamp.
+ */
+function normalizeSortValue(v: unknown): unknown {
+  if (v instanceof Date) return v.getTime();
+  if (v != null && typeof v === 'object' && 'eventType' in (v as object)) {
+    return dateToTimestamp(v);
+  }
+  return v;
 }
 
 function compareValues(a: unknown, b: unknown): number {
@@ -33,8 +47,8 @@ function compareValues(a: unknown, b: unknown): number {
 export function sortMerged<T>(items: T[], sortBy: string, sortOrder: SortOrder): T[] {
   const mult = sortOrder === 'asc' ? 1 : -1;
   return [...items].sort((a, b) => {
-    const va = getByPath(a, sortBy);
-    const vb = getByPath(b, sortBy);
+    const va = normalizeSortValue(getByPath(a, sortBy));
+    const vb = normalizeSortValue(getByPath(b, sortBy));
     if (va == null && vb == null) return 0;
     if (va == null) return 1;
     if (vb == null) return -1;

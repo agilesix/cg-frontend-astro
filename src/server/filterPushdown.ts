@@ -12,6 +12,9 @@ import type { OppStatusOptions } from '@common-grants/sdk/types';
 import type { SourceId } from '@/client/federation/source';
 import type { FilterConfig } from '@/types/portal';
 import { portalConfig } from '@/portal.config';
+import { dateToTimestamp } from '@/lib/format';
+
+const DAY_MS = 86_400_000;
 
 // Mirror of `ActiveFilters` (same shape; importing across the
 // browser/server boundary would just be ceremony).
@@ -71,15 +74,20 @@ function matches(actual: unknown, selected: FilterValue, type: FilterConfig['typ
   if (type === 'checkbox-group' || type === 'select') {
     if (!Array.isArray(selected)) return false;
     if (actual == null) return false;
+    // Some fields (e.g. CA's `caCategories`) are arrays — match if any of the
+    // item's values is selected. Scalar fields match on equality.
+    if (Array.isArray(actual)) return actual.some((a) => selected.includes(a as string));
     return selected.includes(actual as string);
   }
   if (type === 'date-range') {
     if (!isDateRange(selected)) return false;
-    if (typeof actual !== 'string') return false;
-    const t = Date.parse(actual);
-    if (!Number.isFinite(t)) return false;
+    // `actual` is a CommonGrants date event (or Date/string), not a bare
+    // string — normalize to a timestamp before comparing.
+    const t = dateToTimestamp(actual);
+    if (t == null) return false;
+    // `end` is inclusive of the whole selected day (inputs are date-only).
     if (selected.start && t < Date.parse(selected.start)) return false;
-    if (selected.end && t > Date.parse(selected.end)) return false;
+    if (selected.end && t > Date.parse(selected.end) + DAY_MS - 1) return false;
     return true;
   }
   if (type === 'number-range') {

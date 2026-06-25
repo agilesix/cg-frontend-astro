@@ -27,8 +27,8 @@
   const closeDate = $derived(formatDate(getByPath(opportunity, 'keyDates.closeDate')));
   const funding = $derived(
     formatFundingRange(
-      getByPath(opportunity, 'fundingDetails.minAwardAmount.amount'),
-      getByPath(opportunity, 'fundingDetails.maxAwardAmount.amount'),
+      getByPath(opportunity, 'funding.minAwardAmount.amount'),
+      getByPath(opportunity, 'funding.maxAwardAmount.amount'),
     ),
   );
   const href = $derived(`/opportunities/${source}/${encodeURIComponent(id)}`);
