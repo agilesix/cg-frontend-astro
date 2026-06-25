@@ -51,6 +51,15 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     };
   }
 
+  const caUrl = import.meta.env.PUBLIC_CA_API_URL;
+  if (caUrl) {
+    out.california = {
+      id: 'california',
+      label: 'California',
+      client: new Client({ baseUrl: caUrl, auth: Auth.none() }),
+    };
+  }
+
   return out;
 }
 

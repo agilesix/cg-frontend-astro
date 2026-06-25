@@ -24,6 +24,7 @@ const EMPTY_STATE: SourceState = {
 export const sourceState = atom<Record<SourceId, SourceState>>({
   pa: { ...EMPTY_STATE },
   federal: { ...EMPTY_STATE },
+  california: { ...EMPTY_STATE },
 });
 
 /** True iff the most recent population of the active tab came from cache. */

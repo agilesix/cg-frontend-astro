@@ -26,11 +26,12 @@ function reset(): void {
   activeTab.set('pa');
   sortBy.set('keyDates.closeDate');
   sortOrder.set('asc');
-  pagesByTab.set({ pa: 1, federal: 1 });
+  pagesByTab.set({ pa: 1, federal: 1, california: 1 });
   pageSize.set(25);
   sourceState.set({
     pa: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
     federal: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
+    california: { items: [], total: 0, dataAsOf: null, loading: false, error: null },
   });
   cacheHit.set(false);
   resultCache.clear();
@@ -77,9 +78,9 @@ describe('pipeline computeds', () => {
   it('visibleItems paginates per active tab', () => {
     setActiveItems(items);
     pageSize.set(2);
-    pagesByTab.set({ pa: 1, federal: 1 });
+    pagesByTab.set({ pa: 1, federal: 1, california: 1 });
     expect((visibleItems.get() as Array<{ id: string }>).map((i) => i.id)).toEqual(['b', 'a']);
-    pagesByTab.set({ pa: 2, federal: 1 });
+    pagesByTab.set({ pa: 2, federal: 1, california: 1 });
     expect((visibleItems.get() as Array<{ id: string }>).map((i) => i.id)).toEqual(['c']);
   });
 });

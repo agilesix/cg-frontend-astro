@@ -17,7 +17,7 @@ function reset(): void {
   activeTab.set('pa');
   sortBy.set('keyDates.closeDate');
   sortOrder.set('asc');
-  pagesByTab.set({ pa: 1, federal: 1 });
+  pagesByTab.set({ pa: 1, federal: 1, california: 1 });
 }
 
 describe('urlParams', () => {

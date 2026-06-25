@@ -1,6 +1,7 @@
 <script lang="ts">
   import { visibleItems, loading, error, cacheHit, fetchActiveTab } from '@/stores/resultsStore';
   import { clearAllFilters, activeTab } from '@/stores/searchStore';
+  import { SOURCE_LABELS } from '@/client/federation/source';
   import OpportunityCard from './OpportunityCard.svelte';
   import Alert from '@/components/uswds/Alert.svelte';
   import LoadingSpinner from '@/components/uswds/LoadingSpinner.svelte';
@@ -11,7 +12,7 @@
 {/if}
 
 {#if $error}
-  <Alert type="warning" heading="{$activeTab === 'pa' ? 'Pennsylvania' : 'Federal'} unavailable">
+  <Alert type="warning" heading="{SOURCE_LABELS[$activeTab]} unavailable">
     {$error}
   </Alert>
 {/if}

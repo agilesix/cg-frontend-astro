@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SourceId } from '@/client/federation/source';
+  import { SOURCE_LABELS } from '@/client/federation/source';
   import Tag from '@/components/uswds/Tag.svelte';
   import { formatDate, formatFundingRange, getByPath } from '@/lib/format';
 
@@ -11,10 +12,8 @@
 
   let { opportunity, source }: Props = $props();
 
-  const sourceLabel = $derived(source === 'pa' ? 'Pennsylvania' : 'Federal');
-  const sourceVariant = $derived<'source-pa' | 'source-federal'>(
-    source === 'pa' ? 'source-pa' : 'source-federal',
-  );
+  const sourceLabel = $derived(SOURCE_LABELS[source]);
+  const sourceVariant = $derived<`source-${SourceId}`>(`source-${source}`);
 
   const id = $derived(String(getByPath(opportunity, 'id') ?? ''));
   const title = $derived(String(getByPath(opportunity, 'title') ?? 'Untitled opportunity'));

@@ -1,5 +1,6 @@
 ---
 import type { SourceId } from '@/client/federation/source';
+import { SOURCE_LABELS } from '@/client/federation/source';
 import { getByPath } from '@/lib/format';
 
 interface Props {
@@ -9,8 +10,8 @@ interface Props {
 
 const { opportunity, source } = Astro.props;
 
-const sourceLabel = source === 'pa' ? 'Pennsylvania' : 'Federal (Grants.gov)';
-const sourceClass = source === 'pa' ? 'tag--source-pa' : 'tag--source-federal';
+const sourceLabel = SOURCE_LABELS[source];
+const sourceClass = `tag--source-${source}`;
 
 const title = String(getByPath(opportunity, 'title') ?? 'Untitled opportunity');
 const statusValue = String(getByPath(opportunity, 'status.value') ?? '');
@@ -58,6 +59,10 @@ const agency = String(getByPath(opportunity, 'customFields.agency.value.name') ?
   }
   .tag--source-federal {
     background-color: #2e8540;
+    color: #fff;
+  }
+  .tag--source-california {
+    background-color: #b50909;
     color: #fff;
   }
   .agency {
