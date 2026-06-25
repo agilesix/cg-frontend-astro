@@ -62,48 +62,100 @@ export const portalConfig: PortalConfig = {
       perSource: {
         pa: { fieldPath: 'customFields.agency.value.name' },
         federal: { fieldPath: 'customFields.agency.value.name' },
+        california: { fieldPath: 'customFields.agency.value.name' },
       },
     },
   ],
 
+  // Sections are grouped semantically (key dates, funding, eligibility,
+  // contact) and mix standard fields with the relevant custom fields. Rows
+  // whose value is null are dropped, and a card with no surviving rows is not
+  // rendered — so source-specific facts (PA `pa*`, CA `ca*`, federal) can
+  // share a universal card and simply disappear for sources that lack them.
   keyFactsCards: [
     {
-      heading: 'Timeline',
+      heading: 'Key dates',
       facts: [
-        { term: 'Post date', fieldPath: 'keyDates.postDate' },
-        { term: 'Close date', fieldPath: 'keyDates.closeDate' },
+        { term: 'Posted', fieldPath: 'keyDates.postDate', format: 'date' },
+        { term: 'Closes', fieldPath: 'keyDates.closeDate', format: 'date' },
+        // CA expected-award / period are free-form strings, not dates.
+        { term: 'Expected award', fieldPath: 'customFields.caExpAwardDate.value', format: 'text' },
+        { term: 'Award period', fieldPath: 'customFields.caAwardPeriod.value', format: 'text' },
       ],
     },
     {
       heading: 'Funding',
       facts: [
-        { term: 'Minimum award', fieldPath: 'fundingDetails.minAwardAmount.amount' },
-        { term: 'Maximum award', fieldPath: 'fundingDetails.maxAwardAmount.amount' },
-        { term: 'Total available', fieldPath: 'fundingDetails.totalAmountAvailable.amount' },
+        { term: 'Minimum award', fieldPath: 'funding.minAwardAmount.amount', format: 'currency' },
+        { term: 'Maximum award', fieldPath: 'funding.maxAwardAmount.amount', format: 'currency' },
+        {
+          term: 'Total available',
+          fieldPath: 'funding.totalAmountAvailable.amount',
+          format: 'currency',
+        },
+        { term: 'Funding source', fieldPath: 'customFields.fundingSource.value', format: 'text' },
+        {
+          term: 'Funding instrument',
+          fieldPath: 'customFields.fundingInstrument.value',
+          format: 'text',
+        },
+        // CA-specific.
+        { term: 'Funding method', fieldPath: 'customFields.caFundingMethod.value', format: 'text' },
+        {
+          term: 'Cost sharing required',
+          fieldPath: 'customFields.costSharing.value.isRequired',
+          format: 'boolean',
+        },
+        {
+          term: 'Cost sharing details',
+          fieldPath: 'customFields.costSharing.value.details',
+          format: 'text',
+        },
       ],
     },
     {
-      heading: 'Pennsylvania details',
-      sourceFilter: 'pa',
+      heading: 'Eligibility',
       facts: [
-        { term: 'Category', fieldPath: 'customFields.paCategory.value' },
-        { term: 'Funding type', fieldPath: 'customFields.paFundingType.value' },
-        { term: 'Funding source', fieldPath: 'customFields.paFundingSource.value' },
-        { term: 'Grant cycle', fieldPath: 'customFields.paGrantCycle.value' },
-        { term: 'Matching funds', fieldPath: 'customFields.paMatchingFundsRequirement.value' },
+        // PA-specific.
+        { term: 'Category', fieldPath: 'customFields.paCategory.value', format: 'text' },
+        { term: 'Grant cycle', fieldPath: 'customFields.paGrantCycle.value', format: 'text' },
+        // CA-specific.
+        { term: 'Geography', fieldPath: 'customFields.caGeography.value', format: 'text' },
+        {
+          term: 'Letter of intent required',
+          fieldPath: 'customFields.caLoi.value',
+          format: 'boolean',
+        },
+        {
+          term: 'Applicant notes',
+          fieldPath: 'customFields.caApplicantTypeNotes.value',
+          format: 'text',
+        },
+      ],
+    },
+    {
+      heading: 'Contact',
+      facts: [
+        { term: 'Name', fieldPath: 'customFields.contactInfo.value.name', format: 'text' },
+        { term: 'Email', fieldPath: 'customFields.contactInfo.value.email', format: 'text' },
+        { term: 'Phone', fieldPath: 'customFields.contactInfo.value.phone', format: 'text' },
       ],
     },
     {
       heading: 'Federal details',
       sourceFilter: 'federal',
       facts: [
-        { term: 'Agency', fieldPath: 'customFields.agency.value.name' },
         {
           term: 'Federal opportunity number',
           fieldPath: 'customFields.federalOpportunityNumber.value',
+          format: 'text',
         },
-        { term: 'Fiscal year', fieldPath: 'customFields.fiscalYear.value' },
-        { term: 'Funding source', fieldPath: 'customFields.federalFundingSource.value' },
+        { term: 'Fiscal year', fieldPath: 'customFields.fiscalYear.value', format: 'text' },
+        {
+          term: 'Funding source',
+          fieldPath: 'customFields.federalFundingSource.value',
+          format: 'text',
+        },
       ],
     },
   ],

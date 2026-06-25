@@ -42,6 +42,13 @@ export interface KeyFactConfig {
   term: string;
   fieldPath: string;
   hint?: string;
+  /**
+   * How to render the value. When omitted, the renderer infers from the path
+   * (`*Amount*` → currency, `*Date*` → date, else text). Set explicitly for
+   * fields the heuristic would misread — e.g. free-form CA strings that
+   * happen to contain "Date", or booleans.
+   */
+  format?: 'date' | 'currency' | 'boolean' | 'text';
 }
 
 export interface KeyFactsCardConfig {
