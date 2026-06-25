@@ -13,7 +13,11 @@ const DEFAULT_SORT_ORDER: SortOrder = 'asc';
 // Plain (no `$` prefix) so Svelte's `$store` auto-subscribe syntax works
 // in `.svelte` files without identifier clashes.
 export const query = atom<string>('');
-export const filters = atom<ActiveFilters>({});
+// Land on open opportunities by default so a fresh visit doesn't pull in
+// thousands of closed records. A bare /search URL keeps this; any shared URL
+// with filter params overrides it during hydration.
+export const DEFAULT_FILTERS: ActiveFilters = { status: ['open'] };
+export const filters = atom<ActiveFilters>({ ...DEFAULT_FILTERS });
 export const sortBy = atom<string>(DEFAULT_SORT_BY);
 export const sortOrder = atom<SortOrder>(DEFAULT_SORT_ORDER);
 
@@ -156,6 +160,9 @@ onMount(query, () => {
 });
 
 export function clearAllFilters(): void {
-  filters.set({});
+  // Reset to the open-only default rather than no status filter, so "Clear
+  // all" doesn't re-pull every closed opportunity. Removing the remaining
+  // status chip is the explicit path to all statuses.
+  filters.set({ ...DEFAULT_FILTERS });
   query.set('');
 }

@@ -60,8 +60,11 @@
     for (const item of $activeState.items) {
       const val = getByPath(item, path);
       if (typeof val === 'string' && val) seen.add(val);
+      else if (Array.isArray(val)) {
+        for (const v of val) if (typeof v === 'string' && v) seen.add(v);
+      }
     }
-    return [...seen].sort();
+    return [...seen].sort((a, b) => a.localeCompare(b));
   }
 
   function isActive(cfg: FilterConfig): boolean {
@@ -124,30 +127,34 @@
         {:else if cfg.type === 'number-range'}
           {@const nr = ($filters[cfg.id] as NumberRangeValue | undefined) ?? {}}
           <div class="number-range">
-            <label class="usa-label" for="filter-{cfg.id}-min">Min</label>
-            <input
-              class="usa-input"
-              id="filter-{cfg.id}-min"
-              type="number"
-              value={nr.min ?? ''}
-              oninput={(e) => {
-                const raw = (e.currentTarget as HTMLInputElement).value;
-                const n = raw === '' ? undefined : Number(raw);
-                updateFilter(cfg.id, { ...nr, min: Number.isFinite(n) ? n : undefined });
-              }}
-            />
-            <label class="usa-label" for="filter-{cfg.id}-max">Max</label>
-            <input
-              class="usa-input"
-              id="filter-{cfg.id}-max"
-              type="number"
-              value={nr.max ?? ''}
-              oninput={(e) => {
-                const raw = (e.currentTarget as HTMLInputElement).value;
-                const n = raw === '' ? undefined : Number(raw);
-                updateFilter(cfg.id, { ...nr, max: Number.isFinite(n) ? n : undefined });
-              }}
-            />
+            <div class="number-range__field">
+              <label class="usa-label" for="filter-{cfg.id}-min">Min</label>
+              <input
+                class="usa-input"
+                id="filter-{cfg.id}-min"
+                type="number"
+                value={nr.min ?? ''}
+                oninput={(e) => {
+                  const raw = (e.currentTarget as HTMLInputElement).value;
+                  const n = raw === '' ? undefined : Number(raw);
+                  updateFilter(cfg.id, { ...nr, min: Number.isFinite(n) ? n : undefined });
+                }}
+              />
+            </div>
+            <div class="number-range__field">
+              <label class="usa-label" for="filter-{cfg.id}-max">Max</label>
+              <input
+                class="usa-input"
+                id="filter-{cfg.id}-max"
+                type="number"
+                value={nr.max ?? ''}
+                oninput={(e) => {
+                  const raw = (e.currentTarget as HTMLInputElement).value;
+                  const n = raw === '' ? undefined : Number(raw);
+                  updateFilter(cfg.id, { ...nr, max: Number.isFinite(n) ? n : undefined });
+                }}
+              />
+            </div>
           </div>
         {/if}
       </Accordion>
@@ -168,10 +175,18 @@
   .filter-empty {
     font-style: italic;
   }
+  /* Stacked: Min above Max so neither input gets squashed in the sidebar. */
   .number-range {
-    display: grid;
-    grid-template-columns: auto 1fr auto 1fr;
-    align-items: center;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+  }
+  .number-range__field {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Tighten USWDS's default top margin on labels inside the stacked field. */
+  .number-range__field .usa-label {
+    margin-top: 0;
   }
 </style>

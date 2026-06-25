@@ -66,50 +66,69 @@ function patchSource(id: SourceId, patch: Partial<SourceState>): void {
   sourceState.set({ ...current, [id]: { ...current[id], ...patch } });
 }
 
-let requestSeq = 0;
+// Per-tab sequence guard so parallel multi-tab fetches don't clobber each
+// other (a single shared counter would drop all-but-the-last response).
+const requestSeq: Partial<Record<SourceId, number>> = {};
 
-export async function fetchActiveTab(): Promise<void> {
-  const tab = activeTab.get();
+/** Fetch one source under the current query/filters and write its state. */
+export async function fetchTab(id: SourceId): Promise<void> {
   const req = buildRequest();
-  const key = buildCacheKey(tab, req);
+  const key = buildCacheKey(id, req);
+  // `cacheHit` and the loading indicator are about what the user is looking
+  // at, so only the active tab drives them.
+  const isActive = id === activeTab.get();
 
   const cached = resultCache.get(key);
   if (cached) {
-    patchSource(tab, {
+    patchSource(id, {
       items: cached.items,
       total: cached.total,
       dataAsOf: cached.dataAsOf,
       loading: false,
       error: null,
     });
-    cacheHit.set(true);
+    if (isActive) cacheHit.set(true);
     return;
   }
 
-  const seq = ++requestSeq;
-  patchSource(tab, { loading: true, error: null });
-  cacheHit.set(false);
+  const seq = (requestSeq[id] = (requestSeq[id] ?? 0) + 1);
+  patchSource(id, { loading: true, error: null });
+  if (isActive) cacheHit.set(false);
   try {
-    const result = await searchSource(tab, req);
-    if (seq !== requestSeq) return;
+    const result = await searchSource(id, req);
+    if (seq !== requestSeq[id]) return;
     resultCache.set(key, {
       items: result.items,
       total: result.total,
       dataAsOf: result.dataAsOf,
     });
-    patchSource(tab, {
+    patchSource(id, {
       items: result.items,
       total: result.total,
       dataAsOf: result.dataAsOf,
       loading: false,
     });
   } catch (err) {
-    if (seq !== requestSeq) return;
-    patchSource(tab, {
+    if (seq !== requestSeq[id]) return;
+    patchSource(id, {
       loading: false,
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+/** Fetch the currently-active tab. */
+export function fetchActiveTab(): Promise<void> {
+  return fetchTab(activeTab.get());
+}
+
+/**
+ * Fetch every configured source so all tab counts reflect the current
+ * criteria, not just the active tab's. Runs in parallel; per-source errors
+ * are isolated in each source's state.
+ */
+export async function fetchTabs(ids: SourceId[]): Promise<void> {
+  await Promise.all(ids.map((id) => fetchTab(id)));
 }
 
 export function clearCacheAndRefetch(): Promise<void> {

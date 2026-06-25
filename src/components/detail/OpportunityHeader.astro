@@ -20,7 +20,7 @@ const agency = String(getByPath(opportunity, 'customFields.agency.value.name') ?
 
 <header class="opportunity-header">
   <nav aria-label="Breadcrumb">
-    <a href="/search">← Back to search</a>
+    <a href="/search" data-back-link>← Back to search results</a>
   </nav>
 
   <div class="tags">
@@ -31,6 +31,28 @@ const agency = String(getByPath(opportunity, 'customFields.agency.value.name') ?
   <h1>{title}</h1>
   {agency && <p class="agency">{agency}</p>}
 </header>
+
+<script>
+  // Preserve the user's search state (query, filters, sort, page — all encoded
+  // in the /search URL) when returning. If we navigated here from our own
+  // search page, go back to that exact URL; otherwise fall through to the
+  // plain /search href.
+  document.querySelectorAll('[data-back-link]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      const ref = document.referrer;
+      if (!ref) return;
+      try {
+        const url = new URL(ref);
+        if (url.origin === location.origin && url.pathname === '/search') {
+          e.preventDefault();
+          history.back();
+        }
+      } catch {
+        /* malformed referrer — use the href fallback */
+      }
+    });
+  });
+</script>
 
 <style>
   .opportunity-header {
