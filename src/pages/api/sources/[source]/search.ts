@@ -5,7 +5,7 @@ import { getSourceEntry, searchSource, type SourceSearchRequest } from '@/server
 export const prerender = false;
 
 function isSourceId(v: string | undefined): v is SourceId {
-  return v === 'pa' || v === 'federal' || v === 'california';
+  return v === 'pa' || v === 'federal' || v === 'california' || v === 'washington';
 }
 
 export const POST: APIRoute = async ({ request, params }) => {

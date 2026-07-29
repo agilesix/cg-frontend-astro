@@ -8,7 +8,8 @@
       | 'closed'
       | 'source-pa'
       | 'source-federal'
-      | 'source-california';
+      | 'source-california'
+      | 'source-washington';
     onRemove?: () => void;
   }
 
@@ -64,6 +65,10 @@
   }
   .tag--source-california {
     background-color: #b50909;
+    color: #fff;
+  }
+  .tag--source-washington {
+    background-color: #5c4809;
     color: #fff;
   }
 </style>

@@ -60,6 +60,15 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     };
   }
 
+  const waUrl = import.meta.env.PUBLIC_WA_API_URL;
+  if (waUrl) {
+    out.washington = {
+      id: 'washington',
+      label: 'Washington',
+      client: new Client({ baseUrl: waUrl, auth: Auth.none() }),
+    };
+  }
+
   return out;
 }
 

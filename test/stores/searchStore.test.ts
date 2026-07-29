@@ -17,7 +17,7 @@ function reset(): void {
   activeTab.set('pa');
   sortBy.set('keyDates.closeDate');
   sortOrder.set('asc');
-  pagesByTab.set({ pa: 1, federal: 1, california: 1 });
+  pagesByTab.set({ pa: 1, federal: 1, california: 1, washington: 1 });
 }
 
 describe('urlParams', () => {
@@ -102,6 +102,11 @@ describe('hydrateStoresFromUrl', () => {
     activeTab.set('pa');
     hydrateStoresFromUrl('tab=mars');
     expect(activeTab.get()).toBe('pa');
+  });
+
+  it('hydrates Washington as a valid source tab', () => {
+    hydrateStoresFromUrl('tab=washington');
+    expect(activeTab.get()).toBe('washington');
   });
 
   it('hydrates date-range filter from split params', () => {

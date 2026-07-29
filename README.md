@@ -1,8 +1,8 @@
 # cg-astro — Federated CommonGrants portal
 
 Astro + Svelte frontend that searches grant opportunities across multiple
-CommonGrants-compliant APIs in one experience. Ships with Pennsylvania (via
-`cg-api-pa`) and Federal (via `api.simpler.grants.gov`) as first-class sources.
+CommonGrants-compliant APIs in one experience. Ships with Pennsylvania,
+California, Washington, and Federal as first-class sources.
 
 ## What it does
 
@@ -48,9 +48,9 @@ CommonGrants-compliant APIs in one experience. Ships with Pennsylvania (via
 │    server/filterPushdown.ts  — pushdown vs local split   │
 └───────────────────────┼──────────────────────────────────┘
                         ▼
-        ┌───────────────┴───────────────┐
-        ▼                               ▼
-  cg-api-pa (PA)        api.simpler.grants.gov (Federal)
+        ┌───────────────┬───────────────┬────────────────┐
+        ▼               ▼               ▼                ▼
+  cg-api-pa (PA)   cg-api-ca (CA)  cg-api-wa (WA)  Simpler.Grants.gov
 ```
 
 ## Prerequisites
@@ -79,8 +79,8 @@ cp .env.example .env
 pnpm run dev   # astro dev on http://localhost:4321
 ```
 
-Open `http://localhost:4321/search`. Tabs at the top switch between
-Pennsylvania and Federal; the URL syncs the active tab via `?tab=pa|federal`.
+Open `http://localhost:4321/search`. Tabs at the top switch among configured
+sources; the URL syncs the active tab via `?tab=pa|federal|california|washington`.
 
 ## Checks
 
@@ -102,6 +102,8 @@ Pennsylvania and Federal; the URL syncs the active tab via `?tab=pa|federal`.
 | :----------------------- | :------- | :------------------------------------------------------- |
 | `PUBLIC_PA_API_URL`      | optional | Base URL of the PA CommonGrants API (build-time inlined) |
 | `PUBLIC_FEDERAL_API_URL` | optional | Base URL of the federal CommonGrants API (build-time)    |
+| `PUBLIC_CA_API_URL`      | optional | Base URL of the CA CommonGrants API (build-time inlined) |
+| `PUBLIC_WA_API_URL`      | optional | Base URL of the WA CommonGrants API (build-time inlined) |
 | `FEDERAL_API_TOKEN`      | optional | API key for the federal API; server-only, never bundled  |
 
 `PUBLIC_*` URLs are public so Vite inlines them at build time via
@@ -130,6 +132,8 @@ Required repo variables:
 
 - `PUBLIC_PA_API_URL`
 - `PUBLIC_FEDERAL_API_URL`
+- `PUBLIC_CA_API_URL`
+- `PUBLIC_WA_API_URL`
 
 To point preview deploys at staging upstreams without touching production,
 override the same variable / secret names inside the `preview` GitHub
@@ -146,9 +150,11 @@ Environment.
   "pushed down via the SDK" as the spec/SDK gain support for more parameters.
 - **SDK clients, per source.** `src/server/upstream.ts` constructs one
   `@common-grants/sdk/client` `Client` per configured upstream and uses its
-  high-level `.search()` / `.get()` methods. Adding a new source is a
-  single block in `buildSourceRegistry()` — register a `Client`, add a
-  `SourceId`, and tabs / filters / the API endpoint pick it up automatically.
+  high-level `.search()` / `.get()` methods. Adding a source requires a registry
+  entry and `SourceId`, URL/environment wiring, route guards, store defaults,
+  filter mappings, source-tag styling, tests, and deployment configuration.
+  Source-specific detail fields are optional and should only be rendered when
+  their display format is safe and intentional.
 - **Cache key spans the full filter set.** Because the server applies every
   filter, the key is `{sourceId, query, filters}`. Sort and pagination are
   client-side and never invalidate. Persisted to localStorage with cross-tab

@@ -144,6 +144,32 @@ describe('applyLocalFilters', () => {
     expect((out as Array<{ id: string }>).map((i) => i.id)).toEqual(['a']);
   });
 
+  it('matches WA funding-sector categories through the taxonomy path', () => {
+    const items = [
+      {
+        id: 'community-development',
+        customFields: {
+          waTaxonomies: {
+            value: {
+              'funding-sector': ['Buildings & Infrastructure', 'Environmental Justice'],
+            },
+          },
+        },
+      },
+      {
+        id: 'weatherization',
+        customFields: {
+          waTaxonomies: {
+            value: { 'funding-sector': ['Energy Efficiency', 'Resilience'] },
+          },
+        },
+      },
+    ];
+    const local = pickLocalFilters({ category: ['Environmental Justice'] }, 'washington');
+    const out = applyLocalFilters(items, local);
+    expect((out as Array<{ id: string }>).map((i) => i.id)).toEqual(['community-development']);
+  });
+
   it('filters by checkbox-group via dot-notation', () => {
     const items = [
       { id: 'a', customFields: { paCategory: { value: 'Agriculture' } } },

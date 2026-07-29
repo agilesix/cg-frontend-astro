@@ -87,3 +87,18 @@ export function getByPath(obj: unknown, path: string): unknown {
   }
   return cur;
 }
+
+/** Return a usable HTTP(S) URL, or null for malformed and non-web values. */
+export function asHttpUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  try {
+    const url = new URL(raw);
+    const isHttp = url.protocol === 'http:' || url.protocol === 'https:';
+    const hasValidHostname = url.hostname
+      .split('.')
+      .every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
+    return isHttp && hasValidHostname ? raw : null;
+  } catch {
+    return null;
+  }
+}

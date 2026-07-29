@@ -30,6 +30,7 @@ export const portalConfig: PortalConfig = {
         pa: { fieldPath: 'keyDates.closeDate' },
         federal: { fieldPath: 'keyDates.closeDate' },
         california: { fieldPath: 'keyDates.closeDate' },
+        washington: { fieldPath: 'keyDates.closeDate' },
       },
     },
     {
@@ -41,6 +42,7 @@ export const portalConfig: PortalConfig = {
         pa: { fieldPath: 'funding.maxAwardAmount.amount' },
         federal: { fieldPath: 'funding.maxAwardAmount.amount' },
         california: { fieldPath: 'funding.maxAwardAmount.amount' },
+        washington: { fieldPath: 'funding.maxAwardAmount.amount' },
       },
     },
     {
@@ -52,6 +54,7 @@ export const portalConfig: PortalConfig = {
         pa: { fieldPath: 'customFields.paCategory.value' },
         federal: { fieldPath: 'customFields.federalFundingSource.value' },
         california: { fieldPath: 'customFields.caCategories.value' },
+        washington: { fieldPath: 'customFields.waTaxonomies.value.funding-sector' },
       },
     },
     {
@@ -63,6 +66,7 @@ export const portalConfig: PortalConfig = {
         pa: { fieldPath: 'customFields.agency.value.name' },
         federal: { fieldPath: 'customFields.agency.value.name' },
         california: { fieldPath: 'customFields.agency.value.name' },
+        washington: { fieldPath: 'customFields.agency.value.name' },
       },
     },
   ],
@@ -130,6 +134,11 @@ export const portalConfig: PortalConfig = {
           term: 'Applicant notes',
           fieldPath: 'customFields.caApplicantTypeNotes.value',
           format: 'text',
+        },
+        {
+          term: 'Pre-application required',
+          fieldPath: 'customFields.waPreApplicationRequired.value',
+          format: 'boolean',
         },
       ],
     },

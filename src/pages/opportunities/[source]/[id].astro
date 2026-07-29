@@ -12,7 +12,7 @@ export const prerender = false;
 
 const { source, id } = Astro.params;
 
-if (source !== 'pa' && source !== 'federal' && source !== 'california') {
+if (source !== 'pa' && source !== 'federal' && source !== 'california' && source !== 'washington') {
   return Astro.redirect('/search');
 }
 if (!id) {
