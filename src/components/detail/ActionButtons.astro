@@ -1,5 +1,8 @@
 ---
-import { getByPath } from '@/lib/format';
+import {
+  getOpportunityAttachments,
+  getOpportunitySourceUrl,
+} from '@/lib/opportunityLinks';
 
 interface Props {
   opportunity: unknown;
@@ -7,24 +10,8 @@ interface Props {
 
 const { opportunity } = Astro.props;
 
-const sourceUrl =
-  (getByPath(opportunity, 'customFields.additionalInfo.value.url') as string | undefined) ??
-  (getByPath(opportunity, 'source') as string | undefined) ??
-  (getByPath(opportunity, 'customFields.paSlug.value') as string | undefined);
-
-interface Attachment {
-  name?: string;
-  downloadUrl?: string;
-  title?: string;
-  url?: string;
-}
-const attachments = (
-  (getByPath(opportunity, 'customFields.attachments.value') as Attachment[] | undefined) ??
-  (getByPath(opportunity, 'customFields.paAdditionalResources.value') as Attachment[] | undefined) ??
-  []
-)
-  .map((att) => ({ href: att.downloadUrl ?? att.url, label: att.name ?? att.title ?? 'Attachment' }))
-  .filter((a): a is { href: string; label: string } => Boolean(a.href));
+const sourceUrl = getOpportunitySourceUrl(opportunity);
+const attachments = getOpportunityAttachments(opportunity);
 ---
 
 {
