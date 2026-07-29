@@ -8,6 +8,10 @@ import cloudflare from '@astrojs/cloudflare';
 // An adapter is required for any SSR route — Cloudflare Pages here.
 export default defineConfig({
   output: 'static',
+  // Preserve Astro 6's HTML-aware whitespace handling. Astro 7 defaults to
+  // JSX-style compression, which can remove spaces between adjacent inline
+  // elements and subtly change existing portal copy.
+  compressHTML: true,
   // platformProxy runs the dev server under a Miniflare-backed Workers runtime
   // so Svelte's `node:async_hooks` import resolves the same way it will in
   // production. Without it, Vite warns about unexpected Node.js imports in the
