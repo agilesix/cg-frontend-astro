@@ -6,7 +6,12 @@ import { portalConfig } from '@/portal.config';
 import { cacheKey as buildCacheKey } from '@/client/federation/cache';
 
 export const DEFAULT_PAGE_SIZE = 25;
-const VALID_TABS: ReadonlySet<SourceId> = new Set<SourceId>(['pa', 'federal', 'california']);
+const VALID_TABS: ReadonlySet<SourceId> = new Set<SourceId>([
+  'pa',
+  'federal',
+  'california',
+  'washington',
+]);
 const DEFAULT_SORT_BY = 'keyDates.closeDate';
 const DEFAULT_SORT_ORDER: SortOrder = 'asc';
 
@@ -24,7 +29,7 @@ export const sortOrder = atom<SortOrder>(DEFAULT_SORT_ORDER);
 /** Page is per-tab — switching tabs restores the tab's last page. */
 export const pagesByTab = persistentAtom<Record<SourceId, number>>(
   'cg:pagesByTab',
-  { pa: 1, federal: 1, california: 1 },
+  { pa: 1, federal: 1, california: 1, washington: 1 },
   {
     encode: JSON.stringify,
     decode: (raw) => {
@@ -35,9 +40,10 @@ export const pagesByTab = persistentAtom<Record<SourceId, number>>(
           pa: page(parsed.pa),
           federal: page(parsed.federal),
           california: page(parsed.california),
+          washington: page(parsed.washington),
         };
       } catch {
-        return { pa: 1, federal: 1, california: 1 };
+        return { pa: 1, federal: 1, california: 1, washington: 1 };
       }
     },
   },

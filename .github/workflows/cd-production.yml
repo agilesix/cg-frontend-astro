@@ -43,6 +43,7 @@ jobs:
           PUBLIC_PA_API_URL: ${{ vars.PUBLIC_PA_API_URL }}
           PUBLIC_FEDERAL_API_URL: ${{ vars.PUBLIC_FEDERAL_API_URL }}
           PUBLIC_CA_API_URL: ${{ vars.PUBLIC_CA_API_URL }}
+          PUBLIC_WA_API_URL: ${{ vars.PUBLIC_WA_API_URL }}
         run: pnpm run build
 
       - name: Deploy Worker
@@ -71,4 +72,5 @@ jobs:
             echo "| PUBLIC_PA_API_URL | \`${{ vars.PUBLIC_PA_API_URL || '(unset)' }}\` |"
             echo "| PUBLIC_FEDERAL_API_URL | \`${{ vars.PUBLIC_FEDERAL_API_URL || '(unset)' }}\` |"
             echo "| PUBLIC_CA_API_URL | \`${{ vars.PUBLIC_CA_API_URL || '(unset)' }}\` |"
+            echo "| PUBLIC_WA_API_URL | \`${{ vars.PUBLIC_WA_API_URL || '(unset)' }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"

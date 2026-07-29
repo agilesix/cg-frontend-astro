@@ -2,7 +2,7 @@
 // Clients) lives only on the server in `src/server/upstream.ts`; the
 // browser only sees IDs and a tag attached to each merged item.
 
-export type SourceId = 'pa' | 'federal' | 'california';
+export type SourceId = 'pa' | 'federal' | 'california' | 'washington';
 
 export type Tagged<T> = T & { _source: SourceId };
 
@@ -11,4 +11,5 @@ export const SOURCE_LABELS: Record<SourceId, string> = {
   pa: 'Pennsylvania',
   federal: 'Federal',
   california: 'California',
+  washington: 'Washington',
 };

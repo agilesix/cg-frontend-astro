@@ -5,6 +5,8 @@
 interface ImportMetaEnv {
   readonly PUBLIC_PA_API_URL?: string;
   readonly PUBLIC_FEDERAL_API_URL?: string;
+  readonly PUBLIC_CA_API_URL?: string;
+  readonly PUBLIC_WA_API_URL?: string;
 }
 
 // Augments the global ImportMeta with our typed env. Referenced implicitly

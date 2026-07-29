@@ -8,6 +8,8 @@ beforeEach(() => {
   // `vi.stubEnv` updates both `process.env` and `import.meta.env` in vitest.
   vi.stubEnv('PUBLIC_PA_API_URL', 'https://pa.example');
   vi.stubEnv('PUBLIC_FEDERAL_API_URL', 'https://federal.example');
+  vi.stubEnv('PUBLIC_CA_API_URL', 'https://ca.example');
+  vi.stubEnv('PUBLIC_WA_API_URL', 'https://wa.example');
   process.env.FEDERAL_API_TOKEN = 'tok';
 });
 
@@ -144,7 +146,17 @@ describe('getFromSource', () => {
 describe('getSourceDescriptors', () => {
   it('returns only configured sources', async () => {
     vi.stubEnv('PUBLIC_FEDERAL_API_URL', '');
+    vi.stubEnv('PUBLIC_CA_API_URL', '');
+    vi.stubEnv('PUBLIC_WA_API_URL', '');
     const { getSourceDescriptors } = await import('@/server/upstream');
     expect(getSourceDescriptors()).toEqual([{ id: 'pa', label: 'Pennsylvania' }]);
+  });
+
+  it('registers Washington when its public API URL is configured', async () => {
+    vi.stubEnv('PUBLIC_PA_API_URL', '');
+    vi.stubEnv('PUBLIC_FEDERAL_API_URL', '');
+    vi.stubEnv('PUBLIC_CA_API_URL', '');
+    const { getSourceDescriptors } = await import('@/server/upstream');
+    expect(getSourceDescriptors()).toEqual([{ id: 'washington', label: 'Washington' }]);
   });
 });
