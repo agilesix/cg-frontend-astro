@@ -30,6 +30,13 @@ export function dateToTimestamp(raw: unknown): number | null {
   return null;
 }
 
+function isCivilDate(raw: unknown): boolean {
+  if (typeof raw === 'string') return /^\d{4}-\d{2}-\d{2}$/.test(raw);
+  if (raw == null || typeof raw !== 'object' || raw instanceof Date) return false;
+  const eventType = (raw as Record<string, unknown>).eventType;
+  return eventType === 'singleDate' || eventType === 'dateRange';
+}
+
 export function formatDate(raw: unknown): string | null {
   const t = dateToTimestamp(raw);
   if (t == null) return null;
@@ -37,6 +44,8 @@ export function formatDate(raw: unknown): string | null {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    // A protocol date without a time is a civil date, not a UTC instant.
+    ...(isCivilDate(raw) ? { timeZone: 'UTC' } : {}),
   });
 }
 
