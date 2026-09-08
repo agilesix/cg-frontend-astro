@@ -15,9 +15,10 @@
   <Alert type="warning" heading="{SOURCE_LABELS[$activeTab]} unavailable">
     {$error}
   </Alert>
-{/if}
-
-{#if $loading && $visibleItems.length === 0}
+  <button type="button" class="usa-button usa-button--outline" onclick={() => fetchActiveTab()}>
+    Retry
+  </button>
+{:else if $loading}
   <div class="skeleton-list">
     {#each Array(5) as _, i (i)}
       <div class="skeleton-card">

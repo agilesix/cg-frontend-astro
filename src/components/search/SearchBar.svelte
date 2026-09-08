@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { query } from '@/stores/searchStore';
 
   // Each query change refetches every source (auto-paginating up to maxItems),
@@ -11,6 +12,14 @@
   // flushes the value back into the store.
   let value = $derived($query);
   let pending: ReturnType<typeof setTimeout> | undefined;
+
+  onMount(() => {
+    const unsubscribe = query.listen(() => clearTimeout(pending));
+    return () => {
+      unsubscribe();
+      clearTimeout(pending);
+    };
+  });
 
   function commit(v: string) {
     clearTimeout(pending);

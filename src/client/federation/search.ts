@@ -19,6 +19,7 @@ export async function searchSource(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
+    signal: AbortSignal.timeout(30000),
   });
   if (!res.ok) {
     throw new Error(`/api/sources/${sourceId}/search returned ${res.status}`);

@@ -65,6 +65,16 @@ function buildRequest() {
 function patchSource(id: SourceId, patch: Partial<SourceState>): void {
   const current = sourceState.get();
   sourceState.set({ ...current, [id]: { ...current[id], ...patch } });
+  // Only settled results can bound a remembered/requested page. Loading
+  // temporarily empties items and must not reset a valid page to one.
+  if (patch.items && patch.loading === false && !patch.error) {
+    const pages = pagesByTab.get();
+    const page = Math.max(
+      1,
+      Math.min(pages[id] ?? 1, totalPages(patch.items.length, pageSize.get())),
+    );
+    if (page !== pages[id]) pagesByTab.set({ ...pages, [id]: page });
+  }
 }
 
 // Per-tab sequence guard so parallel multi-tab fetches don't clobber each
@@ -78,6 +88,8 @@ export async function fetchTab(id: SourceId): Promise<void> {
   // `cacheHit` and the loading indicator are about what the user is looking
   // at, so only the active tab drives them.
   const isActive = id === activeTab.get();
+  // A cached request also supersedes an older in-flight request.
+  const seq = (requestSeq[id] = (requestSeq[id] ?? 0) + 1);
 
   const cached = resultCache.get(key);
   if (cached) {
@@ -92,8 +104,7 @@ export async function fetchTab(id: SourceId): Promise<void> {
     return;
   }
 
-  const seq = (requestSeq[id] = (requestSeq[id] ?? 0) + 1);
-  patchSource(id, { loading: true, error: null });
+  patchSource(id, { items: [], total: 0, dataAsOf: null, loading: true, error: null });
   if (isActive) cacheHit.set(false);
   try {
     const result = await searchSource(id, req);
@@ -144,6 +155,7 @@ resultCache.onChange((key, entry) => {
   const tab = activeTab.get();
   if (key !== buildCacheKey(tab, buildRequest())) return;
   if (entry) {
+    requestSeq[tab] = (requestSeq[tab] ?? 0) + 1;
     patchSource(tab, {
       items: entry.items,
       total: entry.total,

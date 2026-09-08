@@ -35,7 +35,8 @@ export const pagesByTab = persistentAtom<Record<SourceId, number>>(
     decode: (raw) => {
       try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
-        const page = (v: unknown) => (typeof v === 'number' && v > 0 ? v : 1);
+        const page = (v: unknown) =>
+          typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : 1;
         return {
           pa: page(parsed.pa),
           federal: page(parsed.federal),
@@ -86,6 +87,7 @@ export const urlParams = computed(
     }
     const tabPage = pages[tab] ?? 1;
     if (tabPage > 1) params.set('page', String(tabPage));
+    const nonFilterParamCount = params.size;
     for (const [id, value] of Object.entries(f)) {
       if (value == null) continue;
       if (Array.isArray(value)) {
@@ -100,6 +102,8 @@ export const urlParams = computed(
         params.set(id, value);
       }
     }
+    // Empty arrays/ranges also mean no filtering and must not restore status=open.
+    if (params.size === nonFilterParamCount) params.set('filters', 'none');
     return params.toString();
   },
 );
@@ -141,7 +145,8 @@ export function hydrateStoresFromUrl(search: string): void {
       }
     }
   }
-  if (Object.keys(nextFilters).length > 0) filters.set(nextFilters);
+  if (Object.keys(nextFilters).length > 0 || params.get('filters') === 'none')
+    filters.set(nextFilters);
 
   // Page hydrates last so it isn't clobbered by reset-on-filter listeners.
   if (params.has('page')) {

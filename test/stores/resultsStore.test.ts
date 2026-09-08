@@ -16,7 +16,7 @@ import {
   sortBy,
   sortOrder,
 } from '@/stores/searchStore';
-import { resultCache } from '@/client/federation/cache';
+import { resultCache, cacheKey } from '@/client/federation/cache';
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
@@ -87,6 +87,45 @@ describe('pipeline computeds', () => {
 });
 
 describe('fetchActiveTab', () => {
+  it('a cached B request supersedes a pending A request without stale cache writes', async () => {
+    let resolve!: (value: Response) => void;
+    globalThis.fetch = vi.fn(
+      () =>
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+    );
+    query.set('A');
+    const first = fetchActiveTab();
+    query.set('B');
+    resultCache.set(cacheKey('pa', { query: 'B', filters: {} }), {
+      items: [{ id: 'B' }],
+      total: 1,
+      dataAsOf: null,
+    });
+    await fetchActiveTab();
+    resolve(jsonResponse({ items: [{ id: 'A' }], total: 1, dataAsOf: null }));
+    await first;
+    expect(sourceState.get().pa.items).toEqual([{ id: 'B' }]);
+    expect(resultCache.get(cacheKey('pa', { query: 'A', filters: {} }))).toBeNull();
+  });
+
+  it('keeps requested page during loading and clamps only after settlement', async () => {
+    let resolve!: (value: Response) => void;
+    globalThis.fetch = vi.fn(
+      () =>
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+    );
+    pagesByTab.set({ ...pagesByTab.get(), pa: 8 });
+    const pending = fetchActiveTab();
+    expect(pagesByTab.get().pa).toBe(8);
+    resolve(jsonResponse({ items: [{ id: 'only' }], total: 1, dataAsOf: null }));
+    await pending;
+    expect(pagesByTab.get().pa).toBe(1);
+    expect(visibleItems.get()).toEqual([{ id: 'only' }]);
+  });
   it('hits /api/sources/[active]/search and writes the active tab', async () => {
     const fetchMock = vi.fn(async () =>
       jsonResponse({ items: [{ id: 'x' }], total: 1, dataAsOf: null }),
