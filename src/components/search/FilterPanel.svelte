@@ -57,6 +57,8 @@
     if (!path) return [];
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const seen = new Set<string>();
+    const selected = $filters[cfg.id];
+    if (Array.isArray(selected)) for (const option of selected) seen.add(option);
     for (const item of $activeState.items) {
       const val = getByPath(item, path);
       if (typeof val === 'string' && val) seen.add(val);

@@ -1,20 +1,7 @@
 <script lang="ts">
   import { sortBy, sortOrder } from '@/stores/searchStore';
-  import { total } from '@/stores/resultsStore';
-
-  interface SortOption {
-    value: string; // "field:order" composite
-    label: string;
-  }
-
-  const SORT_OPTIONS: SortOption[] = [
-    { value: 'keyDates.closeDate:asc', label: 'Close date (soonest)' },
-    { value: 'keyDates.closeDate:desc', label: 'Close date (furthest)' },
-    { value: 'createdAt:desc', label: 'Posted (newest)' },
-    { value: 'title:asc', label: 'Title (A–Z)' },
-    { value: 'funding.maxAwardAmount:asc', label: 'Maximum award (lowest)' },
-    { value: 'funding.maxAwardAmount:desc', label: 'Maximum award (highest)' },
-  ];
+  import { total, loading, error } from '@/stores/resultsStore';
+  import { SORT_OPTIONS } from '@/client/searchOptions';
 
   function handleChange(e: Event) {
     const raw = (e.currentTarget as HTMLSelectElement).value;
@@ -26,8 +13,9 @@
 
 <div class="sort-controls">
   <p class="result-count">
-    {$total}
-    {$total === 1 ? 'opportunity' : 'opportunities'}
+    {#if $loading}Loading…{:else if $error}Results unavailable{:else}
+      {$total} {$total === 1 ? 'opportunity' : 'opportunities'}
+    {/if}
   </p>
   <div class="sort-picker">
     <label class="usa-label" for="sort-select">Sort by</label>

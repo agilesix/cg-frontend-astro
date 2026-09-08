@@ -18,7 +18,13 @@ function getByPath(obj: unknown, path: string): unknown {
  * `Date` instances or CommonGrants date events (e.g. the default `keyDates.
  * closeDate` sort) — collapse those to a comparable timestamp.
  */
-function normalizeSortValue(v: unknown): unknown {
+function normalizeSortValue(v: unknown, path: string): unknown {
+  // CommonGrants Money amounts can arrive as decimal strings on the wire.
+  // Only coerce amount fields: titles such as "100" must remain textual.
+  if (path.endsWith('.amount') && typeof v === 'string') {
+    const amount = v.trim() ? Number(v) : NaN;
+    return Number.isFinite(amount) ? amount : undefined;
+  }
   if (v instanceof Date) return v.getTime();
   if (v != null && typeof v === 'object' && 'eventType' in (v as object)) {
     return dateToTimestamp(v);
@@ -47,8 +53,8 @@ function compareValues(a: unknown, b: unknown): number {
 export function sortMerged<T>(items: T[], sortBy: string, sortOrder: SortOrder): T[] {
   const mult = sortOrder === 'asc' ? 1 : -1;
   return [...items].sort((a, b) => {
-    const va = normalizeSortValue(getByPath(a, sortBy));
-    const vb = normalizeSortValue(getByPath(b, sortBy));
+    const va = normalizeSortValue(getByPath(a, sortBy), sortBy);
+    const vb = normalizeSortValue(getByPath(b, sortBy), sortBy);
     if (va == null && vb == null) return 0;
     if (va == null) return 1;
     if (vb == null) return -1;

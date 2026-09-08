@@ -141,6 +141,12 @@ Environment.
 
 ## Architecture notes
 
+- **WebMCP site tools.** On `/search`, compatible browsers can discover source
+  discovery, search, current-state, and opportunity-detail tools. Search updates
+  the same stores and visible controls as manual interaction; detail reads use
+  the shared server-side service. Unsupported browsers keep the ordinary UI.
+  See [WebMCP staging and verification](docs/webmcp-staging.md).
+
 - **Svelte 5 islands + nanostores.** Every island subscribes directly to the
   shared atoms — no shared context or root coordinator. See `src/stores/*.ts`.
 - **Server-side federation.** The browser POSTs `{query, filters}` to
@@ -148,9 +154,12 @@ Environment.
   All predicate logic lives in `src/server/filterPushdown.ts` — a single
   migration seam where rows flip from "applied locally in the Worker" to
   "pushed down via the SDK" as the spec/SDK gain support for more parameters.
-- **SDK clients, per source.** `src/server/upstream.ts` constructs one
-  `@common-grants/sdk/client` `Client` per configured upstream and uses its
-  high-level `.search()` / `.get()` methods. Adding a source requires a registry
+- **Shared grant service, per source.** `src/server/upstream.ts` uses
+  `@common-grants/grant-service`, pinned to a GitHub commit, for collection
+  search and detail retrieval. The same service powers headless MCP tools.
+  Website collection search remains bounded to 1,000 items per source before
+  local filters; headless MCP retains its smaller page contract.
+  Adding a source requires a registry
   entry and `SourceId`, URL/environment wiring, route guards, store defaults,
   filter mappings, source-tag styling, tests, and deployment configuration.
   Source-specific detail fields are optional and should only be rendered when

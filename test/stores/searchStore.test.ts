@@ -23,13 +23,13 @@ function reset(): void {
 describe('urlParams', () => {
   beforeEach(reset);
 
-  it('is empty when state is default', () => {
-    expect(urlParams.get()).toBe('');
+  it('marks explicitly cleared filters', () => {
+    expect(urlParams.get()).toBe('filters=none');
   });
 
   it('serializes query', () => {
     query.set('agriculture');
-    expect(urlParams.get()).toBe('q=agriculture');
+    expect(urlParams.get()).toBe('q=agriculture&filters=none');
   });
 
   it('serializes tab when not default (pa)', () => {
@@ -72,6 +72,25 @@ describe('urlParams', () => {
 
 describe('hydrateStoresFromUrl', () => {
   beforeEach(reset);
+
+  it('round-trips cleared filters without restoring the default status', () => {
+    const serialized = urlParams.get();
+    filters.set({ status: ['open'] });
+    hydrateStoresFromUrl(serialized);
+    expect(filters.get()).toEqual({});
+  });
+
+  it.each([{ status: [] }, { closeDate: {} }, { funding: {} }])(
+    'round-trips empty filter values %j as cleared filters',
+    (empty) => {
+      filters.set(empty);
+      const serialized = urlParams.get();
+      expect(serialized).toContain('filters=none');
+      filters.set({ status: ['open'] });
+      hydrateStoresFromUrl(serialized);
+      expect(filters.get()).toEqual({});
+    },
+  );
 
   it('round-trips a fully-populated state', () => {
     query.set('grants');

@@ -14,6 +14,22 @@ const items: Item[] = [
 ];
 
 describe('sortMerged', () => {
+  it('sorts mixed wire Money strings and numbers numerically with missing amounts last', () => {
+    const money = ['1000.00', 20, '300.00', null].map((amount) => ({
+      funding: { maxAwardAmount: { amount } },
+    }));
+    expect(
+      sortMerged(money, 'funding.maxAwardAmount.amount', 'asc').map(
+        (item) => item.funding.maxAwardAmount.amount,
+      ),
+    ).toEqual([20, '300.00', '1000.00', null]);
+    expect(
+      sortMerged(money, 'funding.maxAwardAmount.amount', 'desc').map(
+        (item) => item.funding.maxAwardAmount.amount,
+      ),
+    ).toEqual(['1000.00', '300.00', 20, null]);
+  });
+
   it('sorts ascending by nested path', () => {
     const out = sortMerged(items, 'keyDates.closeDate', 'asc').map((i) => i.id);
     expect(out).toEqual(['b', 'a', 'd', 'c']); // null last

@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { urlParams, hydrateStoresFromUrl } from '@/stores/searchStore';
-  import { fetchTabs } from '@/stores/resultsStore';
+  import { urlParams, hydrateStoresFromUrl, activeTab } from '@/stores/searchStore';
+  import { createSearchRefresh } from '@/client/searchRefresh';
+  import { modelContext, registerTools } from '@/client/webmcp/register';
+  import { SOURCE_LABELS } from '@/client/federation/source';
   import type { SourceId } from '@/client/federation/source';
 
   // `sources` is the list of configured source IDs (from the server). We fetch
@@ -15,7 +17,8 @@
 
   onMount(() => {
     hydrateStoresFromUrl(window.location.search);
-    void fetchTabs(sources);
+    const refresh = createSearchRefresh(sources);
+    if (!sources.includes(activeTab.get()) && sources[0]) activeTab.set(sources[0]);
 
     // Keep the URL synced. replaceState (not pushState) so we don't inflate
     // browser history with every filter toggle.
@@ -31,12 +34,35 @@
     // Refetch every source on any URL-relevant state change (tab, query,
     // filters, sort). The cache dedupes, so unchanged sources are instant.
     const unsubRefetchOnStateChange = urlParams.subscribe(() => {
-      void fetchTabs(sources);
+      void refresh.refresh();
     });
+
+    let disposed = false;
+    let unregister = () => {};
+    const context = modelContext();
+    if (context && sources.length) {
+      void import('@/client/webmcp/tools')
+        .then(async ({ createSiteTools }) => {
+          if (disposed) return;
+          const cleanup = await registerTools(
+            context,
+            createSiteTools(
+              sources.map((id) => ({ id, label: SOURCE_LABELS[id] })),
+              refresh.refresh,
+            ),
+          );
+          if (disposed) cleanup();
+          else unregister = cleanup;
+        })
+        .catch(() => console.warn('Site tools unavailable; normal search remains available.'));
+    }
 
     return () => {
       unsubUrl();
       unsubRefetchOnStateChange();
+      disposed = true;
+      unregister();
+      refresh.dispose();
     };
   });
 </script>

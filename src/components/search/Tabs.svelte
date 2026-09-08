@@ -13,6 +13,8 @@
   }
 
   function countLabel(id: SourceId): string {
+    if ($sourceState[id]?.loading) return ' · Loading…';
+    if ($sourceState[id]?.error) return ' · Unavailable';
     const total = $sourceState[id]?.total ?? 0;
     return ` · ${total}`;
   }
