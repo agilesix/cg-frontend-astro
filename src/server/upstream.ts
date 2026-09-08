@@ -1,12 +1,12 @@
-// Server-only: per-source search via the SDK's high-level methods, with
+// Server-only: per-source search via the shared grant service, with
 // filter logic centralized here. The browser sends `{query, filters}`
 // verbatim; this module decides what flows into `.search()` vs what's
 // applied in memory after.
 //
 // Adding a new source (e.g. NY) is a one-block change in
-// `buildSourceRegistry`: construct a `Client` and register it.
+// `buildSourceRegistry`: construct a service and register it.
 
-import { Client, Auth } from '@common-grants/sdk/client';
+import { createClients, createGrantService, type GrantService } from '@common-grants/grant-service';
 import type { SourceId } from '@/client/federation/source';
 import {
   pickPushdownFilters,
@@ -18,7 +18,21 @@ import {
 export interface SourceEntry {
   id: SourceId;
   label: string;
-  client: Client;
+  service: Pick<GrantService, 'searchCollection' | 'getOpportunity'>;
+}
+
+function service(id: SourceId, label: string, baseUrl: string, token?: string): GrantService {
+  // Preserve website source IDs (and therefore existing detail/bookmark URLs).
+  return createGrantService(
+    createClients([
+      {
+        name: id,
+        label,
+        baseUrl,
+        auth: token ? { type: 'apiKey', key: token } : { type: 'none' },
+      },
+    ]),
+  );
 }
 
 function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
@@ -34,7 +48,7 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     out.pa = {
       id: 'pa',
       label: 'Pennsylvania',
-      client: new Client({ baseUrl: paUrl, auth: Auth.none() }),
+      service: service('pa', 'Pennsylvania', paUrl),
     };
   }
 
@@ -44,10 +58,7 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     out.federal = {
       id: 'federal',
       label: 'Federal (Grants.gov)',
-      client: new Client({
-        baseUrl: fedUrl,
-        auth: token ? Auth.apiKey(token) : Auth.none(),
-      }),
+      service: service('federal', 'Federal (Grants.gov)', fedUrl, token),
     };
   }
 
@@ -56,7 +67,7 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     out.california = {
       id: 'california',
       label: 'California',
-      client: new Client({ baseUrl: caUrl, auth: Auth.none() }),
+      service: service('california', 'California', caUrl),
     };
   }
 
@@ -65,7 +76,7 @@ function buildSourceRegistry(): Partial<Record<SourceId, SourceEntry>> {
     out.washington = {
       id: 'washington',
       label: 'Washington',
-      client: new Client({ baseUrl: waUrl, auth: Auth.none() }),
+      service: service('washington', 'Washington', waUrl),
     };
   }
 
@@ -98,13 +109,6 @@ export interface SourceSearchResult {
   dataAsOf: string | null;
 }
 
-// Upper bound on items pulled from a source before in-memory filtering runs.
-// Date/funding filters are applied locally (SDK 0.4.0 can't push them down),
-// so the SDK must auto-paginate enough of the result set for those filters to
-// be meaningful — not just the first page. Bump if a source legitimately
-// returns more open opportunities than this.
-const MAX_FETCH = 1000;
-
 /**
  * Single-source search. Pushes the supported filters into the SDK call,
  * applies the rest in memory.
@@ -116,13 +120,13 @@ export async function searchSource(
   const pushdown = pickPushdownFilters(req.filters);
   const local = pickLocalFilters(req.filters, source.id);
 
-  // No explicit `page` → the SDK auto-paginates up to `maxItems`, so local
-  // filters see the full result set rather than just the first page.
-  const result = await source.client.opportunities.search({
+  // The service collects up to 1,000 items before local filters run.
+  // Do not substitute its MCP-oriented search(), which returns one short page.
+  const result = await source.service.searchCollection({
+    source: source.id,
     query: req.query || undefined,
     statuses: pushdown.statuses,
     pageSize: req.pageSize ?? 100,
-    maxItems: MAX_FETCH,
   });
 
   const filtered = applyLocalFilters(result.items, local);
@@ -141,15 +145,12 @@ export async function searchSource(
 }
 
 /**
- * Single-opportunity fetch via the SDK's `.get()`. Returns null on 404 so
+ * Single-opportunity fetch via the shared service. Returns null on 404 so
  * the detail page can redirect to /search.
  */
 export async function getFromSource(source: SourceEntry, id: string): Promise<unknown | null> {
-  try {
-    return await source.client.opportunities.get(id);
-  } catch (err) {
-    // SDK throws a generic Error with the status in the message; sniff for 404.
-    if (err instanceof Error && /\b404\b/.test(err.message)) return null;
-    throw err;
-  }
+  const result = await source.service.getOpportunity({ source: source.id, id });
+  if (result.status === 'success') return result.opportunity;
+  if (/\b404\b/.test(result.error ?? '')) return null;
+  throw new Error(result.error ?? 'Upstream retrieval failed');
 }

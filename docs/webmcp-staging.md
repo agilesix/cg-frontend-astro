@@ -1,5 +1,19 @@
 # WebMCP staging
 
+## Shared service integration
+
+The integration branch consumes `@common-grants/grant-service` from the MCP
+repository's `src/core` directory, pinned to a full GitHub commit in package.json
+and pnpm-lock.yaml. No npm publication or local sibling checkout is required.
+Use pnpm 10.33.0 and frozen-lockfile installs in CI. The package exposes TypeScript
+source for Vite to bundle on the server; it must not be imported by browser islands.
+
+Search uses the service's bounded collection operation (up to 1,000 items), then
+the existing website filters, sorting and pagination. MCP short-page search is
+unchanged. Website source IDs and URLs are preserved. SDK parsing may omit invalid
+upstream rows; valid opportunities retain custom fields and JSON dates.
+WebMCP registration is still a separate follow-up.
+
 Use a draft PR and its per-PR Cloudflare Worker as the integration environment.
 Each push updates the same preview URL. Closing the PR removes its preview.
 The production deployment remains tied to main.

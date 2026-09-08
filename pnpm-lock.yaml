@@ -21,12 +21,12 @@ importers:
       '@astrojs/svelte':
         specifier: ^9.0.1
         version: 9.0.1(@types/node@22.20.1)(astro@7.1.5(@emnapi/core@1.11.1)(@emnapi/runtime@1.11.3)(@types/node@22.20.1)(rollup@4.62.3)(tsx@4.23.1)(yaml@2.9.0))(esbuild@0.28.1)(svelte@5.56.8(@typescript-eslint/types@8.65.0))(tsx@4.23.1)(typescript@5.9.3)(yaml@2.9.0)
-      '@common-grants/cg-grants-gov':
-        specifier: ^0.1.0
-        version: 0.1.0(@common-grants/sdk@0.4.1)
+      '@common-grants/grant-service':
+        specifier: github:agilesix/cg-mcp-grant-seeker#9d2785501a47fc4d7f85317025ea557cb3e9aad5&path:src/core
+        version: https://codeload.github.com/agilesix/cg-mcp-grant-seeker/tar.gz/9d2785501a47fc4d7f85317025ea557cb3e9aad5#path:src/core
       '@common-grants/sdk':
-        specifier: ^0.4.1
-        version: 0.4.1
+        specifier: ^0.6.1
+        version: 0.6.1
       '@nanostores/persistent':
         specifier: ^1.3.4
         version: 1.3.5(nanostores@1.4.2)
@@ -372,13 +372,12 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@common-grants/cg-grants-gov@0.1.0':
-    resolution: {integrity: sha512-K58zRzlRZHEEJHodUKPbJVeyA6WwOTOjezL0W3o78DPL1P7jSQIKWOhe16urh9Za9zQ4jvsPKHK+aj24QGOOWA==}
-    peerDependencies:
-      '@common-grants/sdk': ^0.4.0
+  '@common-grants/grant-service@https://codeload.github.com/agilesix/cg-mcp-grant-seeker/tar.gz/9d2785501a47fc4d7f85317025ea557cb3e9aad5#path:src/core':
+    resolution: {path: src/core, tarball: https://codeload.github.com/agilesix/cg-mcp-grant-seeker/tar.gz/9d2785501a47fc4d7f85317025ea557cb3e9aad5}
+    version: 0.1.0
 
-  '@common-grants/sdk@0.4.1':
-    resolution: {integrity: sha512-3SFAcIiXWlDu2Z0wJ0RnAWMDix9rzHtcHByh4tA1NI1YSC/xqHyFRZphKEJHVAQrDIFMGjrxsWW17+jDzBpNgw==}
+  '@common-grants/sdk@0.6.1':
+    resolution: {integrity: sha512-Ce3Litu0n7+Sv8CF6P00AY1TV3ze+vqOFvvAPWVh0MWCCnLwVeQ2kUhcBAG8vI1o755RsQuHzdySMY3nL5m/5w==}
     engines: {node: '>=22.0.0'}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -3463,11 +3462,12 @@ snapshots:
   '@cloudflare/workerd-windows-64@1.20260722.1':
     optional: true
 
-  '@common-grants/cg-grants-gov@0.1.0(@common-grants/sdk@0.4.1)':
+  '@common-grants/grant-service@https://codeload.github.com/agilesix/cg-mcp-grant-seeker/tar.gz/9d2785501a47fc4d7f85317025ea557cb3e9aad5#path:src/core':
     dependencies:
-      '@common-grants/sdk': 0.4.1
+      '@common-grants/sdk': 0.6.1
+      zod3: zod@3.25.76
 
-  '@common-grants/sdk@0.4.1':
+  '@common-grants/sdk@0.6.1':
     dependencies:
       zod: 3.25.76
 

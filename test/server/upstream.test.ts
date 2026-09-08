@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { Client } from '@common-grants/sdk/client';
+import type { GrantService } from '@common-grants/grant-service';
 import type { SourceEntry } from '@/server/upstream';
 
 beforeEach(() => {
@@ -27,7 +27,7 @@ function makeMockEntry(
   return {
     id: 'pa',
     label: 'Pennsylvania',
-    client: { opportunities: { search } } as unknown as Client,
+    service: { searchCollection: search } as unknown as GrantService,
   };
 }
 
@@ -40,7 +40,7 @@ describe('searchSource', () => {
     const entry: SourceEntry = {
       id: 'pa',
       label: 'PA',
-      client: { opportunities: { search } } as unknown as Client,
+      service: { searchCollection: search } as unknown as GrantService,
     };
 
     const { searchSource } = await import('@/server/upstream');
@@ -56,7 +56,7 @@ describe('searchSource', () => {
       query: 'agriculture',
       statuses: ['open'],
       pageSize: 50,
-      maxItems: 1000,
+      source: 'pa',
     });
     expect(result.items).toEqual([{ id: 'x' }]);
     expect(result.total).toBe(1);
@@ -106,24 +106,29 @@ describe('searchSource', () => {
 
 describe('getFromSource', () => {
   it('returns the SDK result on success', async () => {
-    const get = vi.fn(async () => ({ id: 'x', title: 'Hello' }));
+    const get = vi.fn(async () => ({
+      status: 'success',
+      opportunity: { id: 'x', title: 'Hello' },
+      error: null,
+    }));
     const entry: SourceEntry = {
       id: 'pa',
       label: 'PA',
-      client: { opportunities: { get } } as unknown as Client,
+      service: { getOpportunity: get } as unknown as GrantService,
     };
     const { getFromSource } = await import('@/server/upstream');
     expect(await getFromSource(entry, 'x')).toEqual({ id: 'x', title: 'Hello' });
+    expect(get).toHaveBeenCalledWith({ source: 'pa', id: 'x' });
   });
 
   it('returns null on 404 (sniffed from error message)', async () => {
     const get = vi.fn(async () => {
-      throw new Error('Upstream returned 404');
+      return { status: 'error', opportunity: null, error: 'Upstream returned 404' };
     });
     const entry: SourceEntry = {
       id: 'pa',
       label: 'PA',
-      client: { opportunities: { get } } as unknown as Client,
+      service: { getOpportunity: get } as unknown as GrantService,
     };
     const { getFromSource } = await import('@/server/upstream');
     expect(await getFromSource(entry, 'missing')).toBeNull();
@@ -131,12 +136,12 @@ describe('getFromSource', () => {
 
   it('rethrows non-404 errors', async () => {
     const get = vi.fn(async () => {
-      throw new Error('Upstream returned 500');
+      return { status: 'error', opportunity: null, error: 'Upstream returned 500' };
     });
     const entry: SourceEntry = {
       id: 'pa',
       label: 'PA',
-      client: { opportunities: { get } } as unknown as Client,
+      service: { getOpportunity: get } as unknown as GrantService,
     };
     const { getFromSource } = await import('@/server/upstream');
     await expect(getFromSource(entry, 'x')).rejects.toThrow(/500/);
